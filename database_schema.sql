@@ -4,7 +4,8 @@
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) UNIQUE NOT NULL,
-    role VARCHAR(50) NOT NULL DEFAULT 'standard'
+    role VARCHAR(50) NOT NULL DEFAULT 'standard',
+    password VARCHAR(255)
 );
 
 CREATE TABLE IF NOT EXISTS campaigns (
@@ -13,14 +14,6 @@ CREATE TABLE IF NOT EXISTS campaigns (
     category VARCHAR(255) NOT NULL,
     archived BOOLEAN DEFAULT FALSE,
     inhaber VARCHAR(255) NOT NULL DEFAULT 'alle'
-);
-
-CREATE TABLE IF NOT EXISTS licenses (
-    id SERIAL PRIMARY KEY,
-    category VARCHAR(255),
-    tags VARCHAR(255),
-    name VARCHAR(255),
-    utm_writing VARCHAR(255)
 );
 
 -- Initial Admin User (names are stored in lowercase)
