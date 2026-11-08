@@ -7,8 +7,9 @@ export default async function handler(req, res) {
     if (!process.env.JWT_SECRET) {
       return res.status(500).json({ error: 'Serverkonfigurationsfehler: JWT_SECRET fehlt' });
     }
-    if (!process.env.DATABASE_URL) {
-      return res.status(500).json({ error: 'Serverkonfigurationsfehler: DATABASE_URL fehlt' });
+    const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+    if (!dbUrl) {
+      return res.status(500).json({ error: 'Serverkonfigurationsfehler: DATABASE_URL / POSTGRES_URL fehlt' });
     }
     if (!process.env.ADMIN_PASSWORD) {
       return res.status(500).json({ error: 'Serverkonfigurationsfehler: ADMIN_PASSWORD fehlt' });
@@ -39,7 +40,7 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: 'Ungültiges Admin-Passwort' });
     }
 
-    const sql = neon(process.env.DATABASE_URL);
+    const sql = neon(dbUrl);
 
     if (req.method === 'GET') {
       const result = await sql`SELECT id, name, role FROM users ORDER BY name;`;

@@ -7,8 +7,9 @@ export default async function handler(req, res) {
     if (!process.env.JWT_SECRET) {
       return res.status(500).json({ error: 'Serverkonfigurationsfehler: JWT_SECRET fehlt' });
     }
-    if (!process.env.DATABASE_URL) {
-      return res.status(500).json({ error: 'Serverkonfigurationsfehler: DATABASE_URL fehlt' });
+    const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+    if (!dbUrl) {
+      return res.status(500).json({ error: 'Serverkonfigurationsfehler: DATABASE_URL / POSTGRES_URL fehlt' });
     }
 
     // Authentifizierung
@@ -24,7 +25,7 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Ungültiges Token' });
     }
 
-    const sql = neon(process.env.DATABASE_URL);
+    const sql = neon(dbUrl);
 
     if (req.method === 'GET') {
       let result;
