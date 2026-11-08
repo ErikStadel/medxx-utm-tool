@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { Copy, Search, Archive, Plus, Trash2, Edit3, Check, X, Menu, AlertTriangle, AlertCircle, CheckCircle, Info, LogOut } from 'lucide-react';
 import './App.css';
@@ -274,7 +274,6 @@ const ValidationMessage = ({ field, errors, className = '' }) => {
 // Kampagnen-Input Komponente
 const CampaignInput = ({
   value,
-  isLoading,
   onChange,
   onFocus,
   validationErrors,
@@ -371,9 +370,7 @@ const CampaignInput = ({
           />
           {showCampaignDropdown && (
             <div className="absolute z-10 w-full mt-1 bg-[var(--card-background)] border border-[var(--border-color)] rounded-lg shadow-lg max-h-60 overflow-y-auto">
-              {isLoading ? (
-                <div className="px-4 py-2 text-sm text-gray-500">Kampagnen werden geladen...</div>
-              ) : Array.isArray(filteredCampaigns) && filteredCampaigns.length > 0 ? (
+              {Array.isArray(filteredCampaigns) && filteredCampaigns.length > 0 ? (
                 filteredCampaigns.map((campaign) => (
                   <div
                     key={campaign.id}
@@ -867,7 +864,6 @@ const UTMBuilder = ({ campaigns, setCampaigns, user, onLogout }) => {
   const [campaignSearchTerm, setCampaignSearchTerm] = useState('');
   const [showCampaignDropdown, setShowCampaignDropdown] = useState(false);
   const [filteredCampaigns, setFilteredCampaigns] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
 
   const campaignDropdownRef = useRef(null);
 
@@ -1121,7 +1117,6 @@ const UTMBuilder = ({ campaigns, setCampaigns, user, onLogout }) => {
                     sortedCampaigns={sortedCampaigns}
                     setFilteredCampaigns={setFilteredCampaigns}
                     setShowCampaignDropdown={setShowCampaignDropdown}
-                    isLoading={isLoading}
                   />
 
                   <div>
