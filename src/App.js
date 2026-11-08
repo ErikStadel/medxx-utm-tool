@@ -1,12 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { Copy, Search, Archive, Plus, Trash2, Edit3, Check, X, Menu, AlertTriangle, AlertCircle, CheckCircle, Info, LogOut } from 'lucide-react';
+import { Copy, Search, Archive, Plus, Trash2, Edit3, Check, X, Menu, AlertTriangle, AlertCircle, LogOut } from 'lucide-react';
 import './App.css';
 
-const validateUtmCampaign = (value, isLibraryScreen = false) => {
-  const errors = [];
-  const warnings = [];
-
+const validateUtmCampaign = (value) => {
   if (!value || !value.trim()) {
     return {
       isValid: false,
@@ -15,189 +12,23 @@ const validateUtmCampaign = (value, isLibraryScreen = false) => {
     };
   }
 
-  const trimmedValue = value.trim();
-
-  // Grundlegende Zeichen-Validierung
-  if (/\s/.test(trimmedValue)) {
-    errors.push('Leerzeichen sind nicht erlaubt');
-  }
-
-  if (/[A-Z]/.test(trimmedValue)) {
-    errors.push('Nur Kleinbuchstaben erlaubt');
-  }
-
-  // Erlaubte Zeichen: a-z, 0-9, _, {, }
-  const invalidChars = trimmedValue.match(/[^a-z0-9_{}]/g);
-  if (invalidChars) {
-    const uniqueInvalidChars = [...new Set(invalidChars)];
-    errors.push(`Ungültige Zeichen: ${uniqueInvalidChars.join(', ')} (nur a-z, 0-9, _, {} erlaubt)`);
-  }
-
-  // Spezielle Validierung für Library Screen (strengeres Format)
-  if (isLibraryScreen) {
-    return validateLibraryCampaign(trimmedValue, errors, warnings);
-  }
-
-  // UTM Builder Screen Validierung (flexibler)
-  return validateBuilderCampaign(trimmedValue, errors, warnings);
-};
-
-const validateLibraryCampaign = (value, errors, warnings) => {
-  // Format: YYYY_MM_aktion[_variante]
-  const libraryPattern = /^20\d{2}_([0][1-9]|[1][0-2])_[a-z][a-z0-9_]*(_[a-z0-9][a-z0-9_]*)?$/;
-
-  if (!libraryPattern.test(value)) {
-    const parts = value.split('_');
-
-    if (parts.length < 3) {
-      errors.push('Format muss mindestens YYYY_MM_aktion enthalten');
-    } else {
-      // Jahr validieren
-      const year = parts[0];
-      if (!/^20\d{2}$/.test(year)) {
-        if (!/^\d{4}$/.test(year)) {
-          errors.push('Jahr muss 4-stellig sein (z.B. 2025)');
-        } else if (!year.startsWith('20')) {
-          errors.push('Jahr muss mit 20 beginnen (z.B. 2025)');
-        }
-      } else {
-        const currentYear = new Date().getFullYear();
-        const yearNum = parseInt(year);
-        if (yearNum < currentYear - 1) {
-          warnings.push(`Jahr ${year} liegt weit in der Vergangenheit`);
-        } else if (yearNum > currentYear + 2) {
-          warnings.push(`Jahr ${year} liegt weit in der Zukunft`);
-        }
-      }
-
-      // Monat validieren
-      const month = parts[1];
-      if (!/^([0][1-9]|[1][0-2])$/.test(month)) {
-        if (!/^\d{2}$/.test(month)) {
-          errors.push('Monat muss 2-stellig sein (01-12)');
-        } else if (month === '00') {
-          errors.push('Monat 00 ist ungültig (verwende 01-12)');
-        } else if (parseInt(month) > 12) {
-          errors.push('Monat muss zwischen 01 und 12 liegen');
-        } else if (!month.startsWith('0') && parseInt(month) < 10) {
-          errors.push('Monat muss mit führender Null geschrieben werden (z.B. 08 statt 8)');
-        }
-      }
-
-      // Aktion validieren
-      const action = parts[2];
-      if (!action) {
-        errors.push('Aktion fehlt nach Jahr und Monat');
-      } else if (!/^[a-z]/.test(action)) {
-        errors.push('Aktion muss mit einem Kleinbuchstaben beginnen');
-      } else if (!/^[a-z][a-z0-9_]*$/.test(action)) {
-        errors.push('Aktion darf nur Kleinbuchstaben, Zahlen und Unterstriche enthalten');
-      }
-
-      // Variante validieren (falls vorhanden)
-      if (parts.length > 3) {
-        for (let i = 3; i < parts.length; i++) {
-          const variant = parts[i];
-          if (!variant) {
-            errors.push(`Leere Variante an Position ${i + 1}`);
-          } else if (!/^[a-z0-9][a-z0-9_]*$/.test(variant)) {
-            errors.push(`Variante "${variant}" muss mit Buchstabe oder Zahl beginnen`);
-          }
-        }
-      }
-    }
-
-    // Zusätzliche Validierungen
-    if (value.includes('__')) {
-      errors.push('Doppelte Unterstriche sind nicht erlaubt');
-    }
-
-    if (value.startsWith('_') || value.endsWith('_')) {
-      errors.push('Kampagnenname darf nicht mit Unterstrich beginnen oder enden');
-    }
-  } else {
-    const parts = value.split('_');
-    const currentMonth = new Date().getMonth() + 1;
-    const currentYear = new Date().getFullYear();
-    const campaignMonth = parseInt(parts[1]);
-    const campaignYear = parseInt(parts[0]);
-
-    if (campaignYear === currentYear && campaignMonth < currentMonth - 1) {
-      warnings.push('Kampagne liegt mehrere Monate in der Vergangenheit');
-    }
-
-    if (parts[2].length < 3) {
-      warnings.push('Aktionsname ist sehr kurz - erwäge einen beschreibenderen Namen');
-    }
-  }
-
   return {
-    isValid: errors.length === 0,
-    errors,
-    warnings
+    isValid: true,
+    errors: [],
+    warnings: []
   };
 };
 
-const validateBuilderCampaign = (value, errors, warnings) => {
-  // Placeholder-Validierung
-  const placeholderPattern = /\{[^}]*\}/g;
-  const placeholders = value.match(placeholderPattern) || [];
-
-  placeholders.forEach(placeholder => {
-    if (placeholder === '{}') {
-      errors.push('Leere Platzhalter {} sind nicht erlaubt');
-    }
-    const commonPlaceholders = ['{campaign}', '{keyword}', '{placement}', '{adgroup}', '{device}'];
-    const placeholderName = placeholder.toLowerCase();
-    if (!commonPlaceholders.includes(placeholderName) && !/\{[a-z_][a-z0-9_]*\}/.test(placeholderName)) {
-      warnings.push(`Ungewöhnlicher Platzhalter: ${placeholder}`);
-    }
-  });
-
-  // Struktur-Warnungen
-  if (!value.includes('_') && !placeholders.length) {
-    warnings.push('Kampagne sollte strukturiert sein (z.B. mit Unterstrichen)');
-  }
-
-  if (value.length < 3) {
-    warnings.push('Sehr kurzer Kampagnenname');
-  }
-
-  if (value.length > 100) {
-    errors.push('Kampagnenname ist zu lang (max. 100 Zeichen)');
-  }
-
-  if (value.includes('__')) {
-    errors.push('Doppelte Unterstriche sind nicht erlaubt');
-  }
-
-  if (value.startsWith('_') || value.endsWith('_')) {
-    errors.push('Kampagnenname darf nicht mit Unterstrich beginnen oder enden');
-  }
-
-  if (/\d{3,}$/.test(value)) {
-    warnings.push('Lange Zahlensequenz am Ende - ist das beabsichtigt?');
-  }
-
-  return {
-    isValid: errors.length === 0,
-    errors,
-    warnings
-  };
-};
-
-// Erweiterte validateNomenclature Funktion
-const validateNomenclature = (value, field, isLibraryScreen = false, selectedChannel = '') => {
+// Keine festen Format- oder Schreibweisen-Begrenzungen
+const validateNomenclature = (value, field) => {
   const validationResult = { [field]: null };
 
   if (!value && field !== 'customParams') return validationResult;
 
   if (field === 'campaign') {
-    const result = validateUtmCampaign(value, isLibraryScreen);
+    const result = validateUtmCampaign(value);
     if (!result.isValid) {
       validationResult[field] = result.errors.join('; ');
-    } else if (result.warnings.length > 0) {
-      validationResult[field + '_warning'] = result.warnings.join('; ');
     }
     return validationResult;
   }
@@ -209,35 +40,12 @@ const validateNomenclature = (value, field, isLibraryScreen = false, selectedCha
         validationResult[field] = 'Leere Parameter sind nicht erlaubt';
         return validationResult;
       }
-      if (!/^[a-zA-Z0-9_]+=[a-zA-Z0-9_]+$/.test(pair)) {
-        validationResult[field] = 'Format muss [Parameter]=[Value] sein, z.B. param1=value1';
+      if (!pair.includes('=')) {
+        validationResult[field] = 'Format muss [Parameter]=[Wert] sein, z.B. param1=wert1';
         return validationResult;
       }
     }
     return validationResult;
-  }
-
-  if (field === 'content' || field === 'term') {
-    if (field === 'content' && (selectedChannel === 'Facebook Ads' || selectedChannel === 'Tiktok Ads')) {
-      const allowedDatalistValues = ['{{placement}}', '__PLACEMENT__'];
-      if (allowedDatalistValues.includes(value)) {
-        return validationResult;
-      }
-    }
-
-    if (/[^a-z0-9_{}]/.test(value)) {
-      if (/[A-Z]/.test(value)) {
-        validationResult[field] = 'Nur Kleinbuchstaben erlaubt';
-      } else if (/\s/.test(value)) {
-        validationResult[field] = 'Keine Leerzeichen erlaubt';
-      } else {
-        const invalidChars = value.match(/[^a-z0-9_{}]/g);
-        if (invalidChars) {
-          const uniqueInvalidChars = [...new Set(invalidChars)];
-          validationResult[field] = `Ungültige Zeichen: ${uniqueInvalidChars.join(', ')}`;
-        }
-      }
-    }
   }
 
   return validationResult;
@@ -277,8 +85,6 @@ const CampaignInput = ({
   onChange,
   onFocus,
   validationErrors,
-  isLibraryScreen = false,
-  showPreview = false,
   campaignDropdownRef,
   showCampaignDropdown,
   campaignSearchTerm,
@@ -289,53 +95,16 @@ const CampaignInput = ({
   setFilteredCampaigns,
   setShowCampaignDropdown
 }) => {
-  const getFormatExample = () => {
-    if (isLibraryScreen) {
-      const currentYear = new Date().getFullYear();
-      const currentMonth = String(new Date().getMonth() + 1).padStart(2, '0');
-      return `${currentYear}_${currentMonth}_urlaubsrabatt_01`;
-    }
-    return "z.B. 2025_08_urlaubsrabatt_01";
-  };
-
-  const getFormatHelp = () => {
-    if (isLibraryScreen) {
-      return "Format: YYYY_MM_aktion[_variante]";
-    }
-    return "Kleinbuchstaben, Zahlen, Unterstriche und {} (z.B. de_dd_black_week)";
-  };
-
-  const analyzeFormat = () => {
-    if (!value || isLibraryScreen) return null;
-    const parts = value.split('_');
-    const analysis = [];
-    if (parts.length >= 1) {
-      analysis.push(`Segment${parts.length > 1 ? 'e' : ''}: ${parts.join(', ')}`);
-    }
-    return analysis.length > 0 ? analysis.join(' • ') : null;
-  };
-
   const hasError = validationErrors.campaign;
-  const hasWarning = validationErrors.campaign_warning;
   const getInputClassName = () => {
-    if (hasError) return 'w-full error border-red-500 focus:border-red-500 pr-10';
-    if (hasWarning) return 'w-full warning border-yellow-500 focus:border-yellow-500 pr-10';
-    if (value) return 'w-full valid border-green-500 focus:border-green-500 pr-10';
-    return 'w-full pr-10';
-  };
-
-  const getValidationIcon = () => {
-    if (hasError) return <AlertCircle size={20} className="text-red-500" />;
-    if (hasWarning) return <AlertTriangle size={20} className="text-yellow-500" />;
-    if (value) return <CheckCircle size={20} className="text-green-500" />;
-    return null;
+    if (hasError) return 'w-full error border-red-500 focus:border-red-500';
+    return 'w-full';
   };
 
   return (
     <div className="campaign-input-container">
       <label className="block text-sm font-medium mb-1">
         UTM Campaign *
-        <span className="text-xs text-gray-500 ml-2">{getFormatHelp()}</span>
       </label>
 
       <div className="flex gap-4">
@@ -345,14 +114,9 @@ const CampaignInput = ({
             value={value}
             onChange={(e) => onChange('campaign', e.target.value)}
             onFocus={onFocus}
-            placeholder={getFormatExample()}
+            placeholder="Kampagnenname"
             className={getInputClassName()}
           />
-          {getValidationIcon() && (
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-              {getValidationIcon()}
-            </div>
-          )}
         </div>
 
         <div className="relative flex-1" ref={campaignDropdownRef}>
@@ -394,13 +158,6 @@ const CampaignInput = ({
       </div>
 
       <ValidationMessage field="campaign" errors={validationErrors} className="mt-1" />
-
-      {showPreview && analyzeFormat() && (
-        <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm">
-          <Info size={16} className="inline mr-2 text-blue-600" />
-          <span className="text-blue-800">{analyzeFormat()}</span>
-        </div>
-      )}
     </div>
   );
 };
@@ -922,7 +679,7 @@ const UTMBuilder = ({ campaigns, setCampaigns, user, onLogout }) => {
 
   const handleParamChange = (field, value) => {
     setUtmParams(prev => ({ ...prev, [field]: value }));
-    const errors = validateNomenclature(value, field, false, selectedChannel);
+    const errors = validateNomenclature(value, field);
     setValidationErrors(prev => ({ ...prev, ...errors, [field]: errors[field] || null }));
   };
 
@@ -1106,8 +863,6 @@ const UTMBuilder = ({ campaigns, setCampaigns, user, onLogout }) => {
                     onChange={handleParamChange}
                     onFocus={() => setShowCampaignDropdown(false)}
                     validationErrors={validationErrors}
-                    isLibraryScreen={false}
-                    showPreview={true}
                     campaignDropdownRef={campaignDropdownRef}
                     showCampaignDropdown={showCampaignDropdown}
                     campaignSearchTerm={campaignSearchTerm}
@@ -1257,7 +1012,7 @@ const CampaignLibrary = ({ campaigns, setCampaigns, user, onLogout }) => {
 
   const addCampaign = async () => {
     if (newCampaign.name && newCampaign.category) {
-      const errors = validateNomenclature(newCampaign.name, 'campaign', true);
+      const errors = validateNomenclature(newCampaign.name, 'campaign');
       if (errors.campaign) {
         setValidationErrors(errors);
         return;
@@ -1354,20 +1109,17 @@ const CampaignLibrary = ({ campaigns, setCampaigns, user, onLogout }) => {
           <div>
             <h2>Kampagnen-Bibliothek</h2>
             <div className="mb-6 p-6 bg-[var(--card-background)] rounded-lg border border-custom shadow-lg">
-              <h3>
-                Neue Kampagne hinzufügen
-                <span className="text-xs text-gray-500 ml-2">Format: YYYY_MM_aktion[_variante]</span>
-              </h3>
+              <h3>Neue Kampagne hinzufügen</h3>
               <div className="space-y-3">
                 <div className="relative">
                   <input
                     type="text"
-                    placeholder="Kampagnenname (z.B. 2025_08_urlaubsrabatt_01)"
+                    placeholder="Kampagnenname"
                     value={newCampaign.name}
                     onChange={(e) => {
                       const newValue = e.target.value;
                       setNewCampaign(prev => ({ ...prev, name: newValue }));
-                      const errors = validateNomenclature(newValue, 'campaign', true);
+                      const errors = validateNomenclature(newValue, 'campaign');
                       setValidationErrors(errors);
                     }}
                     className={`w-full ${validationErrors.campaign ? 'error border-red-500' : ''} pr-10`}
@@ -1455,7 +1207,7 @@ const CampaignLibrary = ({ campaigns, setCampaigns, user, onLogout }) => {
                               setCampaigns(prev => prev.map(c =>
                                 c.id === campaign.id ? { ...c, name: newValue } : c
                               ));
-                              const errors = validateNomenclature(newValue, 'campaign', true);
+                              const errors = validateNomenclature(newValue, 'campaign');
                               setValidationErrors(errors);
                             }}
                             className={`w-full px-2 py-1 text-sm ${validationErrors.campaign ? 'error border-red-500' : ''} pr-8`}
