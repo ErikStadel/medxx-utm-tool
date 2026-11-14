@@ -11,10 +11,13 @@ export const ALLOWED_MEDIUMS = [
 ];
 
 export const ALLOWED_FUNNELS = ['tofu', 'mofu', 'bofu', 'retargeting'];
+export const PUBLISHER_ALLOWED_MEDIUMS = ['advertorial', 'display', 'email', 'referral'];
 
 export const SOURCE_CATEGORIES = ['digital', 'publisher', 'offline', 'partner', 'location', 'event'];
 export const USER_CREATABLE_SOURCE_CATEGORIES = ['partner', 'event'];
 export const COMPONENT_TYPES = ['medium', 'topic', 'audience', 'funnel', 'angle', 'format'];
+
+export const DYNAMIC_SOURCE_TOKENS = ['{{site_source_name}}'];
 
 const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -35,6 +38,10 @@ export function normalizeSlug(value) {
 
 export function isValidSlug(value) {
   return typeof value === 'string' && SLUG_REGEX.test(value);
+}
+
+export function isValidSourceValue(value) {
+  return typeof value === 'string' && (DYNAMIC_SOURCE_TOKENS.includes(value.trim()) || isValidSlug(value.trim()));
 }
 
 export function validateCampaignName(name) {
@@ -98,8 +105,8 @@ export function validateLinkPayload(payload) {
   if (!base_url || !full_url || !tracking_template) {
     return 'Base-URL, vollständige URL und Tracking-Template sind erforderlich';
   }
-  if (!isValidSlug(utm_source)) {
-    return 'utm_source ist ungültig (nur Kleinbuchstaben, Ziffern und Bindestriche erlaubt)';
+  if (!isValidSourceValue(utm_source)) {
+    return 'utm_source ist ungültig (nur Kleinbuchstaben, Ziffern, Bindestriche oder {{site_source_name}} erlaubt)';
   }
   if (!ALLOWED_MEDIUMS.includes(utm_medium)) {
     return `utm_medium muss ein gültiger GA4-Wert sein: ${ALLOWED_MEDIUMS.join(', ')}`;

@@ -11,6 +11,7 @@ export const ALLOWED_MEDIUMS = [
 ];
 
 export const ALLOWED_FUNNELS = ['tofu', 'mofu', 'bofu', 'retargeting'];
+export const PUBLISHER_ALLOWED_MEDIUMS = ['advertorial', 'display', 'email', 'referral'];
 
 export const SOURCE_CATEGORY_LABELS = {
   digital: 'Digital (Paid & Organic)',
@@ -45,7 +46,7 @@ export const SCENARIO_PRESETS = [
     label: 'Fachportal Advertorial',
     description: 'Bezahlte Fachartikel (Ärzteblatt, coliquio, Medical Tribune)',
     medium: 'advertorial',
-    sourceMode: 'standard',
+    sourceMode: 'publisher',
     preferredCategories: ['publisher'],
     angle: 'edu',
     format: 'text',
@@ -89,6 +90,8 @@ export const SCENARIO_PRESETS = [
     format: 'tablet',
   },
 ];
+
+export const DYNAMIC_SOURCE_TOKENS = ['{{site_source_name}}'];
 
 const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -167,6 +170,9 @@ export function validateSlugModule(value, fieldLabel) {
 }
 
 export function validateUtmSource(value) {
+  if (value && DYNAMIC_SOURCE_TOKENS.includes(value.trim())) {
+    return null;
+  }
   return validateSlugModule(value, 'utm_source');
 }
 
@@ -323,6 +329,10 @@ export function validateFullUtmState(state, { sources = [], allowedMediums = ALL
         warnings.sourceMedium = `Hinweis: "${state.source}" wird üblicherweise mit ${sourceObj.allowed_mediums.join(' oder ')} kombiniert (gewählt: ${state.medium}).`;
       }
     }
+  }
+
+  if (state.source === '{{site_source_name}}' && state.medium && state.medium !== 'paid_social') {
+    warnings.sourceMedium = 'Der dynamische Platzhalter {{site_source_name}} wird nur in Meta Ads (utm_medium=paid_social) automatisch durch fb/ig ersetzt.';
   }
 
   if (state.term === '{keyword}' && state.medium && state.medium !== 'cpc') {

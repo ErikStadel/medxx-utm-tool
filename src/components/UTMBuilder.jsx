@@ -18,6 +18,7 @@ import QuickAddSourceModal from './QuickAddSourceModal';
 import {
   ALLOWED_FUNNELS,
   ALLOWED_MEDIUMS,
+  PUBLISHER_ALLOWED_MEDIUMS,
   SCENARIO_PRESETS,
   SOURCE_CATEGORY_LABELS,
   getLookerStudioPreview,
@@ -25,10 +26,11 @@ import {
   validateFullUtmState,
 } from '../utils/utmValidation';
 
-const STANDARD_CATEGORIES = ['digital', 'publisher', 'offline'];
+const STANDARD_CATEGORIES = ['digital', 'offline'];
 
 const SOURCE_MODES = [
   { id: 'standard', label: 'Standard-Sources' },
+  { id: 'publisher', label: 'Fachportale / Publisher' },
   { id: 'partner', label: 'Service-Partner' },
   { id: 'location', label: 'Standort / NL' },
   { id: 'event', label: 'Messe / Event' },
@@ -44,10 +46,13 @@ const UTMBuilder = ({
   onLogout,
 }) => {
   const [baseUrl, setBaseUrl] = useState('https://medatixx.de');
-  const [medium, setMedium] = useState('');
   const [sourceMode, setSourceMode] = useState('standard');
   const [source, setSource] = useState('');
+  const [isNewPublisher, setIsNewPublisher] = useState(false);
+  const [newPublisherSlug, setNewPublisherSlug] = useState('');
+  const [newPublisherLabel, setNewPublisherLabel] = useState('');
   const [sourceSearch, setSourceSearch] = useState('');
+  const [medium, setMedium] = useState('');
   const [topic, setTopic] = useState('');
   const [audience, setAudience] = useState('');
   const [funnel, setFunnel] = useState('');
@@ -64,6 +69,7 @@ const UTMBuilder = ({
   const [copyTemplateSuccess, setCopyTemplateSuccess] = useState(false);
   const [isSavingLink, setIsSavingLink] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [savedPublisherSlug, setSavedPublisherSlug] = useState('');
   const [saveError, setSaveError] = useState('');
 
   const [sourceModalOpen, setSourceModalOpen] = useState(false);
@@ -96,6 +102,7 @@ const UTMBuilder = ({
   const sourceCounts = useMemo(
     () => ({
       standard: activeSources.filter((s) => STANDARD_CATEGORIES.includes(s.category)).length,
+      publisher: activeSources.filter((s) => s.category === 'publisher').length,
       partner: activeSources.filter((s) => s.category === 'partner').length,
       location: activeSources.filter((s) => s.category === 'location').length,
       event: activeSources.filter((s) => s.category === 'event').length,
@@ -105,20 +112,12 @@ const UTMBuilder = ({
 
   const standardSources = useMemo(() => {
     const list = activeSources.filter((s) => STANDARD_CATEGORIES.includes(s.category));
-    const recommended = [];
-    const byCategory = { digital: [], publisher: [], offline: [] };
-
+    const byCategory = { digital: [], offline: [] };
     list.forEach((s) => {
-      const isCompatible =
-        medium &&
-        ((Array.isArray(s.allowed_mediums) && s.allowed_mediums.includes(medium)) ||
-          s.default_medium === medium);
-      if (isCompatible) recommended.push(s);
       if (byCategory[s.category]) byCategory[s.category].push(s);
     });
-
-    return { recommended, byCategory };
-  }, [activeSources, medium]);
+    return byCategory;
+  }, [activeSources]);
 
   const subListSources = useMemo(() => {
     if (sourceMode === 'standard') return [];
@@ -133,6 +132,38 @@ const UTMBuilder = ({
       )
       .sort((a, b) => a.label.localeCompare(b.label, 'de'));
   }, [activeSources, sourceMode, sourceSearch]);
+
+  const effectiveSource = isNewPublisher ? newPublisherSlug.trim() : source;
+
+  const selectedSourceObj = useMemo(
+    () => (isNewPublisher ? null : activeSources.find((s) => s.slug === source) || null),
+    [activeSources, source, isNewPublisher]
+  );
+
+  const allowedMediumOptions = useMemo(() => {
+    if (isNewPublisher) {
+      return activeComponents.medium.filter((m) => PUBLISHER_ALLOWED_MEDIUMS.includes(m.slug));
+    }
+    if (!selectedSourceObj) {
+      return [];
+    }
+    const allowed = Array.isArray(selectedSourceObj.allowed_mediums)
+      ? selectedSourceObj.allowed_mediums
+      : [];
+    if (allowed.length > 0) {
+      return activeComponents.medium.filter((m) => allowed.includes(m.slug));
+    }
+    return activeComponents.medium;
+  }, [isNewPublisher, selectedSourceObj, activeComponents.medium]);
+
+  const duplicatePublisherError = useMemo(() => {
+    if (!isNewPublisher || !newPublisherSlug.trim()) return null;
+    const exists = activeSources.find((s) => s.slug === newPublisherSlug.trim());
+    if (exists) {
+      return `Source "${exists.slug}" existiert bereits (${exists.label}). Bitte direkt aus der Liste wählen.`;
+    }
+    return null;
+  }, [isNewPublisher, newPublisherSlug, activeSources]);
 
   const resolvedTerm = useMemo(() => {
     if (termMode === 'none') return '';
@@ -150,18 +181,20 @@ const UTMBuilder = ({
 
   const validation = useMemo(() => {
     const allowedMediums =
-      activeComponents.medium.length > 0
-        ? activeComponents.medium.map((m) => m.slug)
-        : ALLOWED_MEDIUMS;
+      allowedMediumOptions.length > 0
+        ? allowedMediumOptions.map((m) => m.slug)
+        : activeComponents.medium.length > 0
+          ? activeComponents.medium.map((m) => m.slug)
+          : ALLOWED_MEDIUMS;
     const allowedFunnels =
       activeComponents.funnel.length > 0
         ? activeComponents.funnel.map((f) => f.slug)
         : ALLOWED_FUNNELS;
 
-    return validateFullUtmState(
+    const result = validateFullUtmState(
       {
         baseUrl,
-        source,
+        source: effectiveSource,
         medium,
         topic,
         audience,
@@ -177,9 +210,16 @@ const UTMBuilder = ({
         allowedFunnels,
       }
     );
+
+    if (duplicatePublisherError) {
+      result.errors.source = duplicatePublisherError;
+      result.isValid = false;
+    }
+
+    return result;
   }, [
     baseUrl,
-    source,
+    effectiveSource,
     medium,
     topic,
     audience,
@@ -190,15 +230,17 @@ const UTMBuilder = ({
     customParams,
     activeSources,
     activeComponents,
+    allowedMediumOptions,
+    duplicatePublisherError,
   ]);
 
   const utmCampaign = topic && audience && funnel ? `${topic}_${audience}_${funnel}` : '';
   const utmContent = angle && format ? `${angle}_${format}` : '';
 
   const trackingTemplate = useMemo(() => {
-    if (!source || !medium || !utmCampaign) return '';
+    if (!effectiveSource || !medium || !utmCampaign) return '';
     const parts = [
-      `utm_source=${source}`,
+      `utm_source=${effectiveSource}`,
       `utm_medium=${medium}`,
       `utm_campaign=${utmCampaign}`,
     ];
@@ -212,7 +254,7 @@ const UTMBuilder = ({
         .forEach((p) => parts.push(p));
     }
     return parts.join('&');
-  }, [source, medium, utmCampaign, utmContent, resolvedTerm, customParams]);
+  }, [effectiveSource, medium, utmCampaign, utmContent, resolvedTerm, customParams]);
 
   const fullUrl = useMemo(() => {
     if (!baseUrl.trim() || !trackingTemplate) return '';
@@ -227,7 +269,7 @@ const UTMBuilder = ({
   const lookerPreview = useMemo(
     () =>
       getLookerStudioPreview({
-        source,
+        source: effectiveSource,
         medium,
         topic,
         audience,
@@ -236,31 +278,64 @@ const UTMBuilder = ({
         format,
         term: resolvedTerm,
       }),
-    [source, medium, topic, audience, funnel, angle, format, resolvedTerm]
+    [effectiveSource, medium, topic, audience, funnel, angle, format, resolvedTerm]
   );
+
+  const syncMediumForSourceObj = (sourceObj, currentMedium) => {
+    if (!sourceObj) return '';
+    const allowed = Array.isArray(sourceObj.allowed_mediums) ? sourceObj.allowed_mediums : [];
+    if (allowed.length === 1) return allowed[0];
+    if (allowed.length > 0) {
+      if (currentMedium && allowed.includes(currentMedium)) return currentMedium;
+      if (sourceObj.default_medium && allowed.includes(sourceObj.default_medium)) {
+        return sourceObj.default_medium;
+      }
+      return allowed[0];
+    }
+    return sourceObj.default_medium || currentMedium || '';
+  };
 
   const switchSourceMode = (nextMode) => {
     setSourceMode(nextMode);
     setSourceSearch('');
+    setIsNewPublisher(false);
+    setNewPublisherSlug('');
+    setNewPublisherLabel('');
+
     const currentObj = activeSources.find((s) => s.slug === source);
-    if (nextMode === 'standard') {
-      if (currentObj && !STANDARD_CATEGORIES.includes(currentObj.category)) {
-        setSource('');
-      }
-    } else if (!currentObj || currentObj.category !== nextMode) {
+    const keepCurrent =
+      nextMode === 'standard'
+        ? currentObj && STANDARD_CATEGORIES.includes(currentObj.category)
+        : currentObj && currentObj.category === nextMode;
+
+    if (!keepCurrent) {
       setSource('');
+      setMedium('');
     }
     setSaveSuccess(false);
+    setSavedPublisherSlug('');
   };
 
   const handleApplyPreset = (preset) => {
-    if (preset.medium) setMedium(preset.medium);
+    setIsNewPublisher(false);
+    setNewPublisherSlug('');
+    setNewPublisherLabel('');
     if (preset.sourceMode) {
       setSourceMode(preset.sourceMode);
       setSourceSearch('');
     }
-    if (preset.source) setSource(preset.source);
-    else setSource('');
+    if (preset.source) {
+      setSource(preset.source);
+      const found = activeSources.find((s) => s.slug === preset.source);
+      if (preset.medium) {
+        setMedium(preset.medium);
+      } else if (found) {
+        setMedium(syncMediumForSourceObj(found, ''));
+      }
+    } else {
+      setSource('');
+      setMedium('');
+    }
     if (preset.topic) setTopic(preset.topic);
     if (preset.audience) setAudience(preset.audience);
     if (preset.funnel) setFunnel(preset.funnel);
@@ -271,14 +346,18 @@ const UTMBuilder = ({
       setTermInput('');
     }
     setSaveSuccess(false);
+    setSavedPublisherSlug('');
     setSaveError('');
   };
 
   const handleReset = () => {
-    setMedium('');
     setSourceMode('standard');
     setSource('');
+    setIsNewPublisher(false);
+    setNewPublisherSlug('');
+    setNewPublisherLabel('');
     setSourceSearch('');
+    setMedium('');
     setTopic('');
     setAudience('');
     setFunnel('');
@@ -290,6 +369,7 @@ const UTMBuilder = ({
     setNote('');
     setShortlinkUrl('');
     setSaveSuccess(false);
+    setSavedPublisherSlug('');
     setSaveError('');
   };
 
@@ -300,17 +380,29 @@ const UTMBuilder = ({
       return;
     }
 
+    if (nextValue === '__new_publisher') {
+      setIsNewPublisher(true);
+      setSource('');
+      setNewPublisherSlug('');
+      setNewPublisherLabel('');
+      setMedium((prev) => (PUBLISHER_ALLOWED_MEDIUMS.includes(prev) ? prev : 'advertorial'));
+      setSaveSuccess(false);
+      setSavedPublisherSlug('');
+      return;
+    }
+
+    setIsNewPublisher(false);
+    setNewPublisherSlug('');
+    setNewPublisherLabel('');
     setSource(nextValue);
+
     const found = activeSources.find((s) => s.slug === nextValue);
-    if (found) {
-      if (!medium && found.default_medium) {
-        setMedium(found.default_medium);
-      }
-      if (found.shortlink_path && !shortlinkUrl) {
-        setShortlinkUrl(found.shortlink_path);
-      }
+    setMedium((prev) => syncMediumForSourceObj(found, prev));
+    if (found?.shortlink_path && !shortlinkUrl) {
+      setShortlinkUrl(found.shortlink_path);
     }
     setSaveSuccess(false);
+    setSavedPublisherSlug('');
   };
 
   const handleSelectCampaignFromLibrary = (campaignName) => {
@@ -343,6 +435,8 @@ const UTMBuilder = ({
       setIsSavingLink(true);
       setSaveError('');
       setSaveSuccess(false);
+      setSavedPublisherSlug('');
+
       const res = await fetch('/api/links', {
         method: 'POST',
         credentials: 'include',
@@ -351,7 +445,7 @@ const UTMBuilder = ({
           base_url: baseUrl.trim(),
           full_url: fullUrl,
           tracking_template: trackingTemplate,
-          utm_source: source,
+          utm_source: effectiveSource,
           utm_medium: medium,
           utm_campaign: utmCampaign,
           utm_content: utmContent || null,
@@ -359,13 +453,33 @@ const UTMBuilder = ({
           custom_params: customParams.trim() || null,
           shortlink_url: shortlinkUrl.trim() || null,
           note: note.trim() || null,
+          new_publisher: isNewPublisher
+            ? {
+                slug: newPublisherSlug.trim(),
+                label: newPublisherLabel.trim() || newPublisherSlug.trim(),
+              }
+            : null,
         }),
       });
+
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || 'Link konnte nicht gespeichert werden');
       }
-      if (onLinkSaved) onLinkSaved(data);
+
+      const savedLink = data.link || data;
+      const createdSource = data.createdSource || null;
+
+      if (createdSource) {
+        if (onSourceCreated) onSourceCreated(createdSource);
+        setIsNewPublisher(false);
+        setSource(createdSource.slug);
+        setNewPublisherSlug('');
+        setNewPublisherLabel('');
+        setSavedPublisherSlug(createdSource.slug);
+      }
+
+      if (onLinkSaved) onLinkSaved(savedLink);
       setSaveSuccess(true);
     } catch (err) {
       setSaveError(err.message);
@@ -374,6 +488,7 @@ const UTMBuilder = ({
     }
   };
 
+  const normalizedSuggestion = isNewPublisher ? normalizeSlug(newPublisherSlug) : '';
   const canGenerate = validation.isValid && Boolean(fullUrl);
 
   return (
@@ -436,7 +551,7 @@ const UTMBuilder = ({
             )}
           </div>
 
-          {/* 1. Fundament: utm_medium & utm_source (2-stufig) */}
+          {/* 1. Fundament: ZUERST utm_source, DANACH erlaubtes utm_medium */}
           <div className="p-4 rounded-lg bg-gray-800/60 border border-[var(--border-color)] space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-base font-semibold">
@@ -479,35 +594,10 @@ const UTMBuilder = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-              <div>
-                <label>UTM Medium (GA4-Kanal) *</label>
-                <select
-                  value={medium}
-                  onChange={(e) => {
-                    setMedium(e.target.value);
-                    setSaveSuccess(false);
-                  }}
-                  className={validation.errors.medium ? 'error' : ''}
-                >
-                  <option value="">-- Medium wählen --</option>
-                  {activeComponents.medium.map((m) => (
-                    <option key={m.slug} value={m.slug}>
-                      {m.slug} {m.description ? `— ${m.description}` : ''}
-                    </option>
-                  ))}
-                </select>
-                {validation.errors.medium && (
-                  <div className="validation-message error-message">
-                    <AlertCircle size={15} className="mr-2 shrink-0" />
-                    {validation.errors.medium}
-                  </div>
-                )}
-              </div>
-
+              {/* Schritt 1: UTM Source */}
               <div className="space-y-2">
-                <label className="mb-1">UTM Source (Typ & Absender) *</label>
+                <label className="mb-1">1. UTM Source (Typ & Absender) *</label>
 
-                {/* Quell-Typ Auswahl */}
                 <div className="flex flex-wrap gap-1.5">
                   {SOURCE_MODES.map((m) => (
                     <button
@@ -527,21 +617,13 @@ const UTMBuilder = ({
 
                 {sourceMode === 'standard' ? (
                   <select
+                    aria-label="UTM Source"
                     value={source}
                     onChange={(e) => handleSourceChange(e.target.value)}
                     className={validation.errors.source ? 'error' : ''}
                   >
                     <option value="">-- Source wählen --</option>
-                    {standardSources.recommended.length > 0 && (
-                      <optgroup label={`Passend zu "${medium}"`}>
-                        {standardSources.recommended.map((s) => (
-                          <option key={`rec-${s.slug}`} value={s.slug}>
-                            {s.slug} — {s.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                    {Object.entries(standardSources.byCategory).map(([cat, list]) =>
+                    {Object.entries(standardSources).map(([cat, list]) =>
                       list.length > 0 ? (
                         <optgroup key={cat} label={SOURCE_CATEGORY_LABELS[cat] || cat}>
                           {list.map((s) => (
@@ -553,6 +635,9 @@ const UTMBuilder = ({
                       ) : null
                     )}
                     <optgroup label="Große Listen gezielt öffnen">
+                      <option value="__mode:publisher">
+                        Fachportal / Publisher auswählen ({sourceCounts.publisher})...
+                      </option>
                       <option value="__mode:partner">
                         Partner auswählen ({sourceCounts.partner} Service-Partner)...
                       </option>
@@ -577,38 +662,135 @@ const UTMBuilder = ({
                         placeholder={
                           sourceMode === 'partner'
                             ? 'Partner suchen (z. B. Bauer, al-data)...'
-                            : 'Liste filtern...'
+                            : sourceMode === 'publisher'
+                              ? 'Publisher suchen...'
+                              : 'Liste filtern...'
                         }
                         className="w-48 py-1 px-2 text-xs"
                       />
                     </div>
+
                     <select
-                      value={source}
+                      aria-label={SOURCE_CATEGORY_LABELS[sourceMode]}
+                      value={isNewPublisher ? '__new_publisher' : source}
                       onChange={(e) => handleSourceChange(e.target.value)}
                       className={validation.errors.source ? 'error' : ''}
                     >
                       <option value="">
                         -- {SOURCE_CATEGORY_LABELS[sourceMode]} wählen --
                       </option>
+                      {sourceMode === 'publisher' && (
+                        <option value="__new_publisher">+ Neuer Publisher (Freitext)</option>
+                      )}
                       {subListSources.map((s) => (
                         <option key={s.slug} value={s.slug}>
                           {s.label} ({s.slug})
                         </option>
                       ))}
                     </select>
+
+                    {isNewPublisher && (
+                      <div className="pt-2 border-t border-gray-700 space-y-2">
+                        <div>
+                          <label className="text-xs text-gray-300">
+                            Neuer Publisher-Slug (Naming Convention: klein, keine Umlaute/Leerzeichen) *
+                          </label>
+                          <input
+                            type="text"
+                            value={newPublisherSlug}
+                            onChange={(e) => {
+                              setNewPublisherSlug(e.target.value);
+                              setSaveSuccess(false);
+                            }}
+                            placeholder="z. B. aerzte-zeitung oder springer-medizin"
+                            className={`font-mono text-sm ${validation.errors.source ? 'error' : ''}`}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-300">
+                            Anzeigename im Dropdown (optional)
+                          </label>
+                          <input
+                            type="text"
+                            value={newPublisherLabel}
+                            onChange={(e) => {
+                              setNewPublisherLabel(e.target.value);
+                              setSaveSuccess(false);
+                            }}
+                            placeholder="z. B. Ärzte Zeitung"
+                            className="text-sm"
+                          />
+                        </div>
+                        <p className="text-xs text-blue-300 mb-0">
+                          Wird beim Klick auf „Link speichern“ automatisch in Neon eingetragen.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {source && !validation.errors.source && (
+                {effectiveSource && !validation.errors.source && (
                   <p className="text-xs text-[var(--success-color)] mb-0">
-                    Gewählte Tracking-ID: <code className="font-mono">{source}</code>
+                    Gewählte Tracking-ID: <code className="font-mono">{effectiveSource}</code>
                   </p>
                 )}
 
                 {validation.errors.source && (
+                  <div className="validation-message error-message flex-wrap justify-between gap-2">
+                    <span className="flex items-center">
+                      <AlertCircle size={15} className="mr-2 shrink-0" />
+                      {validation.errors.source}
+                    </span>
+                    {isNewPublisher &&
+                      normalizedSuggestion &&
+                      normalizedSuggestion !== newPublisherSlug &&
+                      !duplicatePublisherError && (
+                        <button
+                          type="button"
+                          onClick={() => setNewPublisherSlug(normalizedSuggestion)}
+                          className="text-xs underline font-mono px-2 py-0.5 rounded bg-red-100 text-red-800 hover:bg-red-200"
+                        >
+                          Übernehmen: {normalizedSuggestion}
+                        </button>
+                      )}
+                  </div>
+                )}
+              </div>
+
+              {/* Schritt 2: UTM Medium (gefiltert nach erlaubten Parametern der Source) */}
+              <div>
+                <label>2. UTM Medium (Erlaubte GA4-Kanäle) *</label>
+                <select
+                  aria-label="UTM Medium"
+                  value={medium}
+                  disabled={!effectiveSource && !isNewPublisher}
+                  onChange={(e) => {
+                    setMedium(e.target.value);
+                    setSaveSuccess(false);
+                  }}
+                  className={validation.errors.medium ? 'error' : ''}
+                >
+                  <option value="">
+                    {!effectiveSource && !isNewPublisher
+                      ? '-- Zuerst UTM Source wählen --'
+                      : '-- Medium wählen --'}
+                  </option>
+                  {allowedMediumOptions.map((m) => (
+                    <option key={m.slug} value={m.slug}>
+                      {m.slug} {m.description ? `— ${m.description}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {effectiveSource && allowedMediumOptions.length > 0 && (
+                  <p className="text-xs text-gray-400 mt-1 mb-0">
+                    Erlaubt für <code className="text-gray-200">{effectiveSource}</code>:{' '}
+                    {allowedMediumOptions.map((m) => m.slug).join(', ')}
+                  </p>
+                )}
+                {validation.errors.medium && (
                   <div className="validation-message error-message">
                     <AlertCircle size={15} className="mr-2 shrink-0" />
-                    {validation.errors.source}
+                    {validation.errors.medium}
                   </div>
                 )}
               </div>
@@ -864,8 +1046,13 @@ const UTMBuilder = ({
                   </button>
 
                   {saveSuccess && (
-                    <span className="text-sm text-[var(--success-color)] flex items-center gap-2">
+                    <span className="text-sm text-[var(--success-color)] flex flex-wrap items-center gap-2">
                       ✓ Link gespeichert!
+                      {savedPublisherSlug && (
+                        <span>
+                          Neuer Publisher <code>{savedPublisherSlug}</code> wurde in Neon eingetragen.
+                        </span>
+                      )}
                       <Link to="/links" className="underline inline-flex items-center gap-1 text-blue-300">
                         Alle gespeicherten Links <ExternalLink size={13} />
                       </Link>
@@ -883,7 +1070,7 @@ const UTMBuilder = ({
             </div>
           ) : (
             <div className="p-4 rounded-lg bg-gray-800/40 border border-dashed border-[var(--border-color)] text-sm text-gray-400">
-              Bitte Base URL, UTM Medium, UTM Source sowie alle 3 Bausteine von UTM Campaign (Thema, Zielgruppe, Funnel) gültig auswählen, um die URL zu generieren und zu speichern.
+              Bitte Base URL, UTM Source, erlaubtes UTM Medium sowie alle 3 Bausteine von UTM Campaign (Thema, Zielgruppe, Funnel) gültig auswählen, um die URL zu generieren und zu speichern.
             </div>
           )}
         </div>
@@ -896,15 +1083,16 @@ const UTMBuilder = ({
         initialCategory={sourceModalCategory}
         onCreated={(newSource) => {
           if (onSourceCreated) onSourceCreated(newSource);
-          if (['partner', 'location', 'event'].includes(newSource.category)) {
+          setIsNewPublisher(false);
+          setNewPublisherSlug('');
+          setNewPublisherLabel('');
+          if (['publisher', 'partner', 'location', 'event'].includes(newSource.category)) {
             setSourceMode(newSource.category);
           } else {
             setSourceMode('standard');
           }
           setSource(newSource.slug);
-          if (!medium && newSource.default_medium) {
-            setMedium(newSource.default_medium);
-          }
+          setMedium((prev) => syncMediumForSourceObj(newSource, prev));
           if (newSource.shortlink_path) {
             setShortlinkUrl(newSource.shortlink_path);
           }

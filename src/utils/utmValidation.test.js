@@ -203,4 +203,32 @@ describe('Konzept-Fallbeispiele Validierung', () => {
       expect(validateUtmSource(slug)).toBeNull();
     });
   });
+
+  test('akzeptiert {{site_source_name}} für Meta Paid Social und warnt bei falschem Medium', () => {
+    expect(validateUtmSource('{{site_source_name}}')).toBeNull();
+
+    const paidMeta = validateFullUtmState({
+      baseUrl: 'https://medatixx.de',
+      source: '{{site_source_name}}',
+      medium: 'paid_social',
+      topic: 'healthhub',
+      audience: 'aerzte-allg',
+      funnel: 'tofu',
+      angle: 'pain',
+      format: 'image',
+    });
+    expect(paidMeta.isValid).toBe(true);
+    expect(paidMeta.warnings.sourceMedium).toBeUndefined();
+
+    const organicMetaDynamic = validateFullUtmState({
+      baseUrl: 'https://medatixx.de',
+      source: '{{site_source_name}}',
+      medium: 'organic_social',
+      topic: 'healthhub',
+      audience: 'aerzte-allg',
+      funnel: 'tofu',
+    });
+    expect(organicMetaDynamic.isValid).toBe(true);
+    expect(organicMetaDynamic.warnings.sourceMedium).toBeTruthy();
+  });
 });

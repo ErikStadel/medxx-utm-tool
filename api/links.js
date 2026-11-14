@@ -1,5 +1,9 @@
 import { requireAuth } from './_lib/auth.js';
-import { validateLinkPayload } from './_lib/utmRules.js';
+import {
+  PUBLISHER_ALLOWED_MEDIUMS,
+  isValidSlug,
+  validateLinkPayload,
+} from './_lib/utmRules.js';
 
 export default async function handler(req, res) {
   try {
@@ -35,7 +39,56 @@ export default async function handler(req, res) {
         custom_params,
         shortlink_url,
         note,
+        new_publisher,
       } = payload;
+
+      let createdSource = null;
+
+      if (new_publisher) {
+        const pubSlug = (new_publisher.slug || '').trim();
+        const pubLabel = (new_publisher.label || pubSlug).trim();
+
+        if (!isValidSlug(pubSlug) || pubSlug !== utm_source.trim()) {
+          return res.status(400).json({
+            error: 'Neuer Publisher-Slug verstößt gegen die Naming Convention (nur Kleinbuchstaben a-z, Ziffern 0-9 und Bindestrich - erlaubt)',
+          });
+        }
+
+        if (!PUBLISHER_ALLOWED_MEDIUMS.includes(utm_medium)) {
+          return res.status(400).json({
+            error: `Für Publisher sind nur folgende Mediums erlaubt: ${PUBLISHER_ALLOWED_MEDIUMS.join(', ')}`,
+          });
+        }
+
+        const existingResult = await sql`SELECT id, slug FROM utm_sources WHERE slug = ${pubSlug};`;
+        const existingRows = Array.isArray(existingResult) ? existingResult : existingResult.rows || [];
+        if (existingRows.length > 0) {
+          return res.status(409).json({
+            error: `Source "${pubSlug}" existiert bereits in der Datenbank. Bitte direkt aus dem Dropdown wählen.`,
+          });
+        }
+
+        const insertSourceResult = await sql`
+          INSERT INTO utm_sources (
+            slug, label, category, default_medium, allowed_mediums, shortlink_path, is_active, created_by
+          )
+          VALUES (
+            ${pubSlug},
+            ${pubLabel},
+            'publisher',
+            'advertorial',
+            ${PUBLISHER_ALLOWED_MEDIUMS},
+            NULL,
+            TRUE,
+            ${user.name}
+          )
+          RETURNING *;
+        `;
+        const sourceRows = Array.isArray(insertSourceResult)
+          ? insertSourceResult
+          : insertSourceResult.rows || [];
+        createdSource = sourceRows[0] || null;
+      }
 
       const result = await sql`
         INSERT INTO saved_links (
@@ -69,7 +122,7 @@ export default async function handler(req, res) {
         RETURNING *;
       `;
       const rows = Array.isArray(result) ? result : result.rows || [];
-      return res.status(201).json(rows[0]);
+      return res.status(201).json({ link: rows[0], createdSource });
     }
 
     if (req.method === 'DELETE') {
