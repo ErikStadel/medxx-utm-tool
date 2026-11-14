@@ -1,8 +1,23 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 
-test('renders learn react link', () => {
+beforeEach(() => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: false,
+      json: () => Promise.resolve({ error: 'Not authenticated' }),
+    })
+  );
+});
+
+afterEach(() => {
+  jest.resetAllMocks();
+});
+
+test('zeigt Login-Ansicht wenn kein gültiges Token vorliegt', async () => {
   render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+  await waitFor(() => {
+    expect(screen.getByText(/medxx-utm-tool/i)).toBeInTheDocument();
+  });
+  expect(screen.getByRole('button', { name: /Anmelden/i })).toBeInTheDocument();
 });

@@ -1,5 +1,5 @@
 -- Database Schema for medxx-utm-tool
--- Can be executed directly in Neon / PostgreSQL SQL Editor
+-- Can be executed directly in Neon / PostgreSQL SQL Editor (idempotent)
 
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
@@ -13,10 +13,168 @@ CREATE TABLE IF NOT EXISTS campaigns (
     name VARCHAR(255) NOT NULL,
     category VARCHAR(255) NOT NULL,
     archived BOOLEAN DEFAULT FALSE,
-    inhaber VARCHAR(255) NOT NULL DEFAULT 'alle'
+    inhaber VARCHAR(255) NOT NULL DEFAULT 'alle',
+    topic_slug VARCHAR(120),
+    audience_slug VARCHAR(120),
+    funnel_slug VARCHAR(50)
+);
+
+ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS topic_slug VARCHAR(120);
+ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS audience_slug VARCHAR(120);
+ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS funnel_slug VARCHAR(50);
+
+-- Optional: Alte Test-Kampagnen vor dem Start bereinigen (falls gewünscht manuell ausführen):
+-- DELETE FROM campaigns WHERE topic_slug IS NULL;
+
+-- Sources: Plattformen, Fachportale/Publisher, Offline, Service-Partner, Messen/Events
+CREATE TABLE IF NOT EXISTS utm_sources (
+    id SERIAL PRIMARY KEY,
+    slug VARCHAR(120) UNIQUE NOT NULL,
+    label VARCHAR(255) NOT NULL,
+    category VARCHAR(50) NOT NULL,
+    default_medium VARCHAR(50),
+    allowed_mediums TEXT[] DEFAULT '{}',
+    shortlink_path VARCHAR(255),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_by VARCHAR(255) NOT NULL DEFAULT 'system',
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Modulare Bausteine & GA4-Standards (medium, topic, audience, funnel, angle, format)
+CREATE TABLE IF NOT EXISTS utm_components (
+    id SERIAL PRIMARY KEY,
+    component_type VARCHAR(50) NOT NULL,
+    slug VARCHAR(120) NOT NULL,
+    label VARCHAR(255) NOT NULL,
+    description TEXT,
+    sort_order INTEGER DEFAULT 0,
+    is_locked BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_by VARCHAR(255) NOT NULL DEFAULT 'system',
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE (component_type, slug)
+);
+
+-- Gespeicherte UTM-Links (Historie / Tracking-Übersicht)
+CREATE TABLE IF NOT EXISTS saved_links (
+    id SERIAL PRIMARY KEY,
+    base_url TEXT NOT NULL,
+    full_url TEXT NOT NULL,
+    tracking_template TEXT NOT NULL,
+    utm_source VARCHAR(120) NOT NULL,
+    utm_medium VARCHAR(50) NOT NULL,
+    utm_campaign VARCHAR(255) NOT NULL,
+    utm_content VARCHAR(255),
+    utm_term VARCHAR(255),
+    custom_params TEXT,
+    shortlink_url VARCHAR(255),
+    note TEXT,
+    created_by VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Initial Admin User (names are stored in lowercase)
 INSERT INTO users (name, role)
 VALUES ('admin', 'admin')
 ON CONFLICT (name) DO NOTHING;
+
+-- Seed: GA4-konforme utm_medium Standards (gesperrt)
+INSERT INTO utm_components (component_type, slug, label, description, sort_order, is_locked)
+VALUES
+    ('medium', 'cpc', 'cpc', 'Search / SEA (Google Ads)', 10, TRUE),
+    ('medium', 'paid_social', 'paid_social', 'Meta, LinkedIn Ads', 20, TRUE),
+    ('medium', 'organic_social', 'organic_social', 'Unbezahlte Social-Posts', 30, TRUE),
+    ('medium', 'email', 'email', 'Newsletter, Mailings via CleverReach / SFMC', 40, TRUE),
+    ('medium', 'display', 'display', 'Banner auf Fachportalen, GDN', 50, TRUE),
+    ('medium', 'advertorial', 'advertorial', 'Bezahlte Online-Fachartikel / Sponsored Content', 60, TRUE),
+    ('medium', 'offline', 'offline', 'Print-Mailings, Flyer, Postkarten, Partner-Rollups', 70, TRUE),
+    ('medium', 'event', 'event', 'Messen, Kongresse, Roadshows, Tablet-Erfassung', 80, TRUE),
+    ('medium', 'referral', 'referral', 'Unbezahlte Partner-Verlinkungen', 90, TRUE)
+ON CONFLICT (component_type, slug) DO NOTHING;
+
+-- Seed: utm_campaign Modul A - [Thema]
+INSERT INTO utm_components (component_type, slug, label, description, sort_order, is_locked)
+VALUES
+    ('topic', 'healthhub', 'healthhub', 'HealthHub Initiative', 10, FALSE),
+    ('topic', 'meet-medatixx', 'meet-medatixx', 'meet.medatixx Kampagne', 20, FALSE),
+    ('topic', 'regulatorik', 'regulatorik', 'Regulatorik-Themen', 30, FALSE),
+    ('topic', 'ki-in-der-praxis', 'ki-in-der-praxis', 'KI in der Praxis', 40, FALSE),
+    ('topic', 'ti-bundle', 'ti-bundle', 'TI-Bundle', 50, FALSE),
+    ('topic', 'isynet-fruehbucher', 'isynet-fruehbucher', 'x.isynet Frühbucher-Angebot', 60, FALSE),
+    ('topic', 'fit-fuer-medatixx', 'fit-fuer-medatixx', 'Fit für medatixx', 70, FALSE),
+    ('topic', 'stand-tablet', 'stand-tablet', 'Messe-Lead-Erfassung über Stand-Tablet', 80, FALSE),
+    ('topic', 'xscribe', 'xscribe', 'x.scribe Transkription', 90, FALSE),
+    ('topic', 'praxissoftware', 'praxissoftware', 'Generische Praxissoftware-Kampagne', 100, FALSE)
+ON CONFLICT (component_type, slug) DO NOTHING;
+
+-- Seed: utm_campaign Modul B - [Zielgruppe]
+INSERT INTO utm_components (component_type, slug, label, description, sort_order, is_locked)
+VALUES
+    ('audience', 'aerzte-allg', 'aerzte-allg', 'Ärzte allgemein / Niedergelassene', 10, FALSE),
+    ('audience', 'mfas', 'mfas', 'Medizinische Fachangestellte / Praxismanagement', 20, FALSE),
+    ('audience', 'psychotherapeuten', 'psychotherapeuten', 'Psychotherapeuten (psyx-relevant)', 30, FALSE),
+    ('audience', 'mvz', 'mvz', 'Medizinische Versorgungszentren', 40, FALSE),
+    ('audience', 'bk-isynet', 'bk-isynet', 'Bestandskunden x.isynet', 50, FALSE),
+    ('audience', 'bk-medatixx', 'bk-medatixx', 'Bestandskunden medatixx', 60, FALSE),
+    ('audience', 'bk-psyx', 'bk-psyx', 'Bestandskunden psyx', 70, FALSE),
+    ('audience', 'bk-allg', 'bk-allg', 'Bestandskunden allgemein', 80, FALSE),
+    ('audience', 'engaged-audience', 'engaged-audience', 'Warmes Publikum / Interaktoren', 90, FALSE),
+    ('audience', 'lookalike', 'lookalike', 'Lookalike Audiences', 100, FALSE),
+    ('audience', 'niederlassung', 'niederlassung', 'Existenzgründer / Neu-Niederlassung', 110, FALSE)
+ON CONFLICT (component_type, slug) DO NOTHING;
+
+-- Seed: utm_campaign Modul C - [Funnel] (gesperrt)
+INSERT INTO utm_components (component_type, slug, label, description, sort_order, is_locked)
+VALUES
+    ('funnel', 'tofu', 'tofu', 'Top of Funnel / Awareness', 10, TRUE),
+    ('funnel', 'mofu', 'mofu', 'Middle of Funnel / Consideration & Educating', 20, TRUE),
+    ('funnel', 'bofu', 'bofu', 'Bottom of Funnel / Conversion, Termin, Demo, Kauf', 30, TRUE),
+    ('funnel', 'retargeting', 'retargeting', 'Wiederansprache', 40, TRUE)
+ON CONFLICT (component_type, slug) DO NOTHING;
+
+-- Seed: utm_content Modul A - [Angle]
+INSERT INTO utm_components (component_type, slug, label, description, sort_order, is_locked)
+VALUES
+    ('angle', 'pain', 'pain', 'Pain Point / Schmerzpunkt (z. B. Doku-Frust, Zeitmangel)', 10, FALSE),
+    ('angle', 'edu', 'edu', 'Educative / Informativ, Aufklärung, Leitfaden', 20, FALSE),
+    ('angle', 'trust', 'trust', 'Social Proof / Kundenstimmen, Marktführerschaft', 30, FALSE),
+    ('angle', 'feature', 'feature', 'Konkreter Produkt-/Funktionsfokus', 40, FALSE),
+    ('angle', 'promo', 'promo', 'Angebot, Rabatt, Frühbucher, Dringlichkeit', 50, FALSE),
+    ('angle', 'lead-erfassung', 'lead-erfassung', 'Funktionale Formulare (z. B. Messe-Tablets)', 60, FALSE)
+ON CONFLICT (component_type, slug) DO NOTHING;
+
+-- Seed: utm_content Modul B - [Format]
+INSERT INTO utm_components (component_type, slug, label, description, sort_order, is_locked)
+VALUES
+    ('format', 'image', 'image', 'Single Image', 10, FALSE),
+    ('format', 'carousel', 'carousel', 'Carousel Ad', 20, FALSE),
+    ('format', 'video', 'video', 'Video Ad', 30, FALSE),
+    ('format', 'text', 'text', 'Text-Ad, Advertorial-Artikel, Newsletter-Textlink', 40, FALSE),
+    ('format', 'banner', 'banner', 'Display-Banner', 50, FALSE),
+    ('format', 'qr-code', 'qr-code', 'QR-Code auf Flyern, Postkarten, Briefen', 60, FALSE),
+    ('format', 'rollup', 'rollup', 'Rollup / QR-Code auf Rollup', 70, FALSE),
+    ('format', 'rollup-qr', 'rollup-qr', 'QR-Code auf Partner-Rollup', 75, FALSE),
+    ('format', 'mailing-qr', 'mailing-qr', 'QR-Code auf Print-Mailing / Brief', 80, FALSE),
+    ('format', 'postkarte-qr', 'postkarte-qr', 'QR-Code auf Postkarte', 85, FALSE),
+    ('format', 'tablet', 'tablet', 'Messe-Tablet vor Ort', 90, FALSE)
+ON CONFLICT (component_type, slug) DO NOTHING;
+
+-- Seed: utm_sources (Digital, Fachportale, Offline, Partner, Messen)
+INSERT INTO utm_sources (slug, label, category, default_medium, allowed_mediums, shortlink_path)
+VALUES
+    ('google', 'Google', 'digital', 'cpc', ARRAY['cpc', 'display'], NULL),
+    ('linkedin', 'LinkedIn', 'digital', 'paid_social', ARRAY['paid_social', 'organic_social'], NULL),
+    ('meta', 'Meta (Facebook & Instagram)', 'digital', 'paid_social', ARRAY['paid_social', 'organic_social'], NULL),
+    ('cleverreach', 'CleverReach', 'digital', 'email', ARRAY['email'], NULL),
+    ('aerzteblatt', 'Deutsches Ärzteblatt', 'publisher', 'advertorial', ARRAY['advertorial', 'display', 'email'], NULL),
+    ('coliquio', 'coliquio', 'publisher', 'advertorial', ARRAY['advertorial', 'display', 'email'], NULL),
+    ('medical-tribune', 'Medical Tribune', 'publisher', 'advertorial', ARRAY['advertorial', 'display'], NULL),
+    ('kbv', 'KBV', 'publisher', 'advertorial', ARRAY['advertorial', 'display', 'referral'], NULL),
+    ('print', 'Print / Dialogpost allgemein', 'offline', 'offline', ARRAY['offline'], NULL),
+    ('service-partner', 'Service Partner (Generisch / Massenproduktion)', 'partner', 'offline', ARRAY['offline', 'referral'], NULL),
+    ('partner-mueller', 'Service Partner: Müller', 'partner', 'offline', ARRAY['offline', 'referral'], 'medatixx.de/partner-mueller'),
+    ('messe-muenchen', 'Messe München', 'event', 'event', ARRAY['event'], NULL),
+    ('messe-dusseldorf', 'Messe Düsseldorf', 'event', 'event', ARRAY['event'], NULL),
+    ('interbiologica', 'interbiologica', 'event', 'event', ARRAY['event'], NULL),
+    ('apontis', 'apontis', 'event', 'event', ARRAY['event'], NULL)
+ON CONFLICT (slug) DO NOTHING;

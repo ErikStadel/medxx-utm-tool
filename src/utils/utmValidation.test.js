@@ -1,0 +1,187 @@
+import {
+  normalizeSlug,
+  buildSourceSlug,
+  validateUtmSource,
+  validateUtmMedium,
+  validateUtmCampaignParts,
+  validateUtmCampaignString,
+  validateUtmContentParts,
+  validateUtmContentString,
+  validateUtmTerm,
+  validateFullUtmState,
+  getLookerStudioPreview,
+} from './utmValidation';
+
+describe('normalizeSlug', () => {
+  test('wandelt Großbuchstaben, Umlaute, ß, Leerzeichen und Unterstriche korrekt um', () => {
+    expect(normalizeSlug('Praxis Müller & Söhne')).toBe('praxis-mueller-soehne');
+    expect(normalizeSlug('Straße_Test  Groß')).toBe('strasse-test-gross');
+    expect(normalizeSlug('KI in der Praxis')).toBe('ki-in-der-praxis');
+    expect(normalizeSlug('  --healthhub__test--  ')).toBe('healthhub-test');
+  });
+});
+
+describe('buildSourceSlug', () => {
+  test('ergänzt partner- und messe-Prefixe intelligent', () => {
+    expect(buildSourceSlug('Müller GmbH', 'partner', true)).toBe('partner-mueller-gmbh');
+    expect(buildSourceSlug('partner-nord', 'partner', true)).toBe('partner-nord');
+    expect(buildSourceSlug('service-partner', 'partner', true)).toBe('service-partner');
+    expect(buildSourceSlug('München', 'event', true)).toBe('messe-muenchen');
+    expect(buildSourceSlug('interbiologica', 'event', false)).toBe('interbiologica');
+  });
+});
+
+describe('Konzept-Fallbeispiele Validierung', () => {
+  test('akzeptiert alle Beispiele aus dem medatixx UTM-Konzept', () => {
+    const cases = [
+      {
+        baseUrl: 'https://medatixx.de/xscribe',
+        source: 'linkedin',
+        medium: 'paid_social',
+        topic: 'xscribe',
+        audience: 'aerzte-allg',
+        funnel: 'tofu',
+        angle: 'pain',
+        format: 'image',
+        term: 'jobtitel-niedergelassen',
+      },
+      {
+        baseUrl: 'https://medatixx.de/fruehbucher',
+        source: 'print',
+        medium: 'offline',
+        topic: 'isynet-fruehbucher',
+        audience: 'bk-isynet',
+        funnel: 'bofu',
+        angle: 'promo',
+        format: 'qr-code',
+      },
+      {
+        baseUrl: 'https://medatixx.de/ki',
+        source: 'aerzteblatt',
+        medium: 'advertorial',
+        topic: 'ki-in-der-praxis',
+        audience: 'mfas',
+        funnel: 'mofu',
+        angle: 'edu',
+        format: 'text',
+      },
+      {
+        baseUrl: 'https://medatixx.de/praxissoftware',
+        source: 'google',
+        medium: 'cpc',
+        topic: 'praxissoftware',
+        audience: 'aerzte-allg',
+        funnel: 'bofu',
+        angle: 'feature',
+        format: 'text',
+        term: '{keyword}',
+      },
+      {
+        baseUrl: 'https://medatixx.de/partner',
+        source: 'partner-mueller',
+        medium: 'offline',
+        topic: 'healthhub',
+        audience: 'aerzte-allg',
+        funnel: 'mofu',
+        angle: 'feature',
+        format: 'rollup',
+      },
+      {
+        baseUrl: 'https://medatixx.de/messe-lead',
+        source: 'messe-muenchen',
+        medium: 'event',
+        topic: 'stand-tablet',
+        audience: 'aerzte-allg',
+        funnel: 'bofu',
+        angle: 'lead-erfassung',
+        format: 'tablet',
+      },
+    ];
+
+    cases.forEach((c) => {
+      const res = validateFullUtmState(c);
+      expect(res.isValid).toBe(true);
+      expect(res.errors).toEqual({});
+    });
+  });
+
+  test('verhindert Großbuchstaben, Umlaute, Unterstriche innerhalb Modulen und ungültige Mediums/Funnels', () => {
+    expect(validateUtmSource('LinkedIn')).toBeTruthy();
+    expect(validateUtmSource('partner_mueller')).toBeTruthy();
+    expect(validateUtmSource('ärzteblatt')).toBeTruthy();
+    expect(validateUtmMedium('aff')).toBeTruthy();
+
+    expect(
+      validateUtmCampaignParts({
+        topic: 'ki_praxis',
+        audience: 'aerzte-allg',
+        funnel: 'mofu',
+      })
+    ).toBeTruthy();
+
+    expect(
+      validateUtmCampaignParts({
+        topic: 'healthhub',
+        audience: 'aerzte-allg',
+        funnel: 'unknown',
+      })
+    ).toBeTruthy();
+
+    expect(validateUtmCampaignString('healthhub_aerzte-allg')).toBeTruthy();
+    expect(validateUtmCampaignString('healthhub_aerzte_allg_mofu')).toBeTruthy();
+    expect(validateUtmCampaignString('healthhub_aerzte-allg_mofu')).toBeNull();
+  });
+
+  test('prüft utm_content Paar-Vollständigkeit und genau 1 Unterstrich', () => {
+    expect(validateUtmContentParts({ angle: '', format: '' })).toBeNull();
+    expect(validateUtmContentParts({ angle: 'pain', format: '' })).toBeTruthy();
+    expect(validateUtmContentParts({ angle: '', format: 'image' })).toBeTruthy();
+    expect(validateUtmContentParts({ angle: 'pain', format: 'image' })).toBeNull();
+    expect(validateUtmContentString('pain_image_extra')).toBeTruthy();
+    expect(validateUtmContentString('pain_image')).toBeNull();
+  });
+
+  test('prüft utm_term und Warnungen', () => {
+    expect(validateUtmTerm('{keyword}')).toBeNull();
+    expect(validateUtmTerm('jobtitel-niedergelassen')).toBeNull();
+    expect(validateUtmTerm('Invalid Term')).toBeTruthy();
+
+    const offlineResult = validateFullUtmState({
+      baseUrl: 'https://medatixx.de',
+      source: 'print',
+      medium: 'offline',
+      topic: 'healthhub',
+      audience: 'aerzte-allg',
+      funnel: 'mofu',
+      angle: 'promo',
+      format: 'mailing-qr',
+    });
+    expect(offlineResult.isValid).toBe(true);
+    expect(offlineResult.warnings.offline).toBeTruthy();
+  });
+
+  test('erzeugt korrekte Looker-Studio-Split-Vorschau', () => {
+    const preview = getLookerStudioPreview({
+      source: 'linkedin',
+      medium: 'paid_social',
+      topic: 'xscribe',
+      audience: 'aerzte-allg',
+      funnel: 'tofu',
+      angle: 'pain',
+      format: 'image',
+      term: 'jobtitel-niedergelassen',
+    });
+    expect(preview).toEqual({
+      source: 'linkedin',
+      medium: 'paid_social',
+      campaign: 'xscribe_aerzte-allg_tofu',
+      topic: 'xscribe',
+      audience: 'aerzte-allg',
+      funnel: 'tofu',
+      content: 'pain_image',
+      angle: 'pain',
+      format: 'image',
+      term: 'jobtitel-niedergelassen',
+    });
+  });
+});

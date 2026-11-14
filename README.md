@@ -1,12 +1,16 @@
 # medxx-utm-tool
 
-UTM Parameter Generator & Kampagnen-Management für Marketing-Teams.
+UTM Parameter Generator, Link-Historie & Kampagnen-Management für das medatixx Marketing-Team.
 
 ## Features
 
-- **UTM Parameter Builder**: Schnelles und einheitliches Erstellen von UTM-Tracking-URLs für diverse Marketing-Kanäle (Google Ads, Bing Ads, Facebook Ads, TikTok Ads, Email, Social Organic, Affiliate etc.).
-- **Kampagnen-Bibliothek**: Speichern, Validieren, Verwalten und Wiederverwenden von Kampagnen-Parametern.
-- **Benutzerverwaltung & Sicherheit**: Rollenbasierter Zugriff (`admin` und `standard`) geschützt über Benutzername + Passwort, JWT-Cookies (HttpOnly, SameSite) und Admin-Berechtigung.
+- **Modularer UTM Parameter Builder (`/`)**: Dropdown-geführtes Zusammenstellen von `utm_medium`, `utm_source`, `utm_campaign` (`[Thema]_[Zielgruppe]_[Funnel]`), `utm_content` (`[Angle]_[Format]`) und `utm_term` inkl. Live-Check und Looker-Studio-Split-Vorschau.
+- **Gespeicherte Links (`/links`)**: Speichern aller generierten UTM-URLs in Neon (`saved_links`) inklusive optionaler Notiz und TYPO3-Shortlink-Dokumentation, Suche, Filter und Kopierfunktion.
+- **Kampagnen-Bibliothek (`/library`)**: Modulare Verwaltung wiederkehrender Kampagnen (`[Thema]_[Zielgruppe]_[Funnel]`).
+- **Partner-, Messen- & Katalogverwaltung (`/manage`)**:
+  - Standard-Nutzer können neue **Partner** (`partner-[name]`) und **Messen/Events** (`messe-[stadt]`) in Neon anlegen.
+  - Admins verwalten zusätzlich alle weiteren Sources, Themen, Zielgruppen, Angles und Formate (`utm_medium` und `Funnel` sind geschützte GA4-Standards).
+- **Benutzerverwaltung & Sicherheit (`/admin`)**: Rollenbasierter Zugriff (`admin` und `standard`) über JWT-Cookies (HttpOnly, SameSite) und Admin-Passwort.
 
 ## Umgebungsvariablen (Environment Variables)
 
@@ -21,7 +25,7 @@ Für den Betrieb (lokal in `.env` oder in den Vercel Project Settings) werden fo
 
 ## Datenbank einrichten
 
-Führen Sie die Befehle aus `database_schema.sql` im SQL-Editor Ihrer Neon- oder Postgres-Datenbank aus, um die Tabellen `users` und `campaigns` anzulegen.
+Führen Sie die Befehle aus `database_schema.sql` im SQL-Editor Ihrer Neon- oder Postgres-Datenbank aus, um die Tabellen `users`, `campaigns`, `utm_sources`, `utm_components` und `saved_links` inkl. Start-Katalog anzulegen.
 
 ## Lokale Entwicklung
 

@@ -1,56 +1,63 @@
-import { neon } from '@neondatabase/serverless';
-import jwt from 'jsonwebtoken';
-import { parse } from 'cookie';
+import { requireAuth } from './_lib/auth.js';
+import { validateCampaignName } from './_lib/utmRules.js';
+
+function resolveCampaignParts(body = {}) {
+  const { name, topic_slug, audience_slug, funnel_slug } = body;
+  if (topic_slug && audience_slug && funnel_slug) {
+    const t = topic_slug.trim();
+    const a = audience_slug.trim();
+    const f = funnel_slug.trim();
+    return {
+      name: `${t}_${a}_${f}`,
+      topic_slug: t,
+      audience_slug: a,
+      funnel_slug: f,
+    };
+  }
+  const trimmedName = (name || '').trim();
+  const parts = trimmedName.split('_');
+  return {
+    name: trimmedName,
+    topic_slug: parts[0] || null,
+    audience_slug: parts[1] || null,
+    funnel_slug: parts[2] || null,
+  };
+}
 
 export default async function handler(req, res) {
   try {
-    if (!process.env.JWT_SECRET) {
-      return res.status(500).json({ error: 'Serverkonfigurationsfehler: JWT_SECRET fehlt' });
-    }
-    const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
-    if (!dbUrl) {
-      return res.status(500).json({ error: 'Serverkonfigurationsfehler: DATABASE_URL / POSTGRES_URL fehlt' });
-    }
-
-    // Authentifizierung
-    const cookies = parse(req.headers.cookie || '');
-    const token = cookies.userToken;
-    if (!token) {
-      return res.status(401).json({ error: 'Nicht authentifiziert' });
-    }
-
-    try {
-      req.user = jwt.verify(token, process.env.JWT_SECRET);
-    } catch {
-      return res.status(401).json({ error: 'Ungültiges Token' });
-    }
-
-    const sql = neon(dbUrl);
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+    const { sql, user } = auth;
 
     if (req.method === 'GET') {
-      let result;
-      if (req.user.role === 'admin') {
-        result = await sql`SELECT * FROM campaigns ORDER BY id DESC;`;
-      } else {
-        result = await sql`
-          SELECT * FROM campaigns 
-          WHERE inhaber = ${req.user.name} OR inhaber = 'alle' 
-          ORDER BY id DESC;
-        `;
-      }
+      const result =
+        user.role === 'admin'
+          ? await sql`SELECT * FROM campaigns ORDER BY id DESC;`
+          : await sql`
+              SELECT * FROM campaigns
+              WHERE inhaber = ${user.name} OR inhaber = 'alle'
+              ORDER BY id DESC;
+            `;
       const rows = Array.isArray(result) ? result : result.rows || [];
       return res.status(200).json(rows);
     }
 
     if (req.method === 'POST') {
-      const { name, category, inhaber: providedInhaber } = req.body || {};
-      if (!name || !category) {
-        return res.status(400).json({ error: 'Name und Kategorie erforderlich' });
+      const { category, inhaber: providedInhaber } = req.body || {};
+      const { name, topic_slug, audience_slug, funnel_slug } = resolveCampaignParts(req.body);
+
+      const nameErr = validateCampaignName(name);
+      if (nameErr) {
+        return res.status(400).json({ error: nameErr });
       }
-      const finalInhaber = (req.user.role === 'admin' && providedInhaber === 'alle') ? 'alle' : req.user.name;
+
+      const finalCategory = (category || topic_slug || '').trim();
+      const finalInhaber = user.role === 'admin' && providedInhaber === 'alle' ? 'alle' : user.name;
+
       const result = await sql`
-        INSERT INTO campaigns (name, category, archived, inhaber)
-        VALUES (${name.trim()}, ${category.trim()}, FALSE, ${finalInhaber})
+        INSERT INTO campaigns (name, category, archived, inhaber, topic_slug, audience_slug, funnel_slug)
+        VALUES (${name}, ${finalCategory}, FALSE, ${finalInhaber}, ${topic_slug}, ${audience_slug}, ${funnel_slug})
         RETURNING *;
       `;
       const rows = Array.isArray(result) ? result : result.rows || [];
@@ -58,26 +65,48 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'PUT') {
-      const { id, name, category, archived, inhaber: providedInhaber } = req.body || {};
+      const { id, category, archived, inhaber: providedInhaber } = req.body || {};
       if (!id) {
         return res.status(400).json({ error: 'ID erforderlich' });
       }
 
+      const { name, topic_slug, audience_slug, funnel_slug } = resolveCampaignParts(req.body);
+      const nameErr = validateCampaignName(name);
+      if (nameErr) {
+        return res.status(400).json({ error: nameErr });
+      }
+
+      const finalCategory = (category || topic_slug || '').trim();
+      const isArchived = Boolean(archived);
+
       let result;
-      if (req.user.role === 'admin') {
-        const finalInhaber = providedInhaber || req.user.name;
+      if (user.role === 'admin') {
+        const finalInhaber = providedInhaber || user.name;
         result = await sql`
           UPDATE campaigns
-          SET name = ${name}, category = ${category}, archived = ${archived}, inhaber = ${finalInhaber}
+          SET
+            name = ${name},
+            category = ${finalCategory},
+            archived = ${isArchived},
+            inhaber = ${finalInhaber},
+            topic_slug = ${topic_slug},
+            audience_slug = ${audience_slug},
+            funnel_slug = ${funnel_slug}
           WHERE id = ${id}
           RETURNING *;
         `;
       } else {
-        // Nicht-Admins dürfen nur eigene Kampagnen bearbeiten
         result = await sql`
           UPDATE campaigns
-          SET name = ${name}, category = ${category}, archived = ${archived}, inhaber = ${req.user.name}
-          WHERE id = ${id} AND inhaber = ${req.user.name}
+          SET
+            name = ${name},
+            category = ${finalCategory},
+            archived = ${isArchived},
+            inhaber = ${user.name},
+            topic_slug = ${topic_slug},
+            audience_slug = ${audience_slug},
+            funnel_slug = ${funnel_slug}
+          WHERE id = ${id} AND inhaber = ${user.name}
           RETURNING *;
         `;
       }
@@ -95,13 +124,10 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'ID erforderlich' });
       }
 
-      let result;
-      if (req.user.role === 'admin') {
-        result = await sql`DELETE FROM campaigns WHERE id = ${id} RETURNING id;`;
-      } else {
-        // Nicht-Admins dürfen nur eigene Kampagnen löschen
-        result = await sql`DELETE FROM campaigns WHERE id = ${id} AND inhaber = ${req.user.name} RETURNING id;`;
-      }
+      const result =
+        user.role === 'admin'
+          ? await sql`DELETE FROM campaigns WHERE id = ${id} RETURNING id;`
+          : await sql`DELETE FROM campaigns WHERE id = ${id} AND inhaber = ${user.name} RETURNING id;`;
 
       const rows = Array.isArray(result) ? result : result.rows || [];
       if (rows.length === 0) {
