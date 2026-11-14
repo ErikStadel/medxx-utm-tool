@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Plus, Trash2, AlertCircle, CheckCircle2, Lock, Power } from 'lucide-react';
+import { Plus, Trash2, AlertCircle, CheckCircle2, Lock, Power, Search } from 'lucide-react';
 import LayoutHeader from './LayoutHeader';
 import {
   ALLOWED_MEDIUMS,
@@ -38,9 +38,10 @@ const TaxonomyManager = ({
   const [sourceLabel, setSourceLabel] = useState('');
   const [sourceSlug, setSourceSlug] = useState('');
   const [slugEdited, setSlugEdited] = useState(false);
-  const [usePrefix, setUsePrefix] = useState(true);
+  const [usePrefix, setUsePrefix] = useState(false);
   const [defaultMedium, setDefaultMedium] = useState('offline');
   const [shortlinkPath, setShortlinkPath] = useState('');
+  const [listSearch, setListSearch] = useState('');
 
   // Component form state
   const [compSlug, setCompSlug] = useState('');
@@ -52,10 +53,11 @@ const TaxonomyManager = ({
     setSuccess('');
     setCompSlug('');
     setCompDescription('');
+    setListSearch('');
     if (tabKey === 'partner_event') {
       setSourceCategory('partner');
       setDefaultMedium('offline');
-      setUsePrefix(true);
+      setUsePrefix(false);
     } else if (tabKey === 'sources_admin') {
       setSourceCategory('publisher');
       setDefaultMedium('advertorial');
@@ -235,14 +237,18 @@ const TaxonomyManager = ({
   };
 
   const displayedSources = useMemo(() => {
-    if (activeTab === 'partner_event') {
-      return sources.filter((s) => s.category === 'partner' || s.category === 'event');
-    }
-    if (activeTab === 'sources_admin') {
-      return sources.filter((s) => !['partner', 'event'].includes(s.category));
-    }
-    return [];
-  }, [sources, activeTab]);
+    const q = listSearch.trim().toLowerCase();
+    const base =
+      activeTab === 'partner_event'
+        ? sources.filter((s) => s.category === 'partner' || s.category === 'event')
+        : activeTab === 'sources_admin'
+          ? sources.filter((s) => !['partner', 'event'].includes(s.category))
+          : [];
+    if (!q) return base;
+    return base.filter(
+      (s) => s.slug.toLowerCase().includes(q) || s.label.toLowerCase().includes(q)
+    );
+  }, [sources, activeTab, listSearch]);
 
   const displayedComponents = useMemo(() => {
     if (activeTab === 'standards') {
@@ -336,6 +342,7 @@ const TaxonomyManager = ({
                           <option value="publisher">Fachportal / Publisher</option>
                           <option value="digital">Digital</option>
                           <option value="offline">Offline / Print</option>
+                          <option value="location">Standort / Niederlassung</option>
                         </>
                       )}
                     </select>
@@ -447,6 +454,19 @@ const TaxonomyManager = ({
               {activeTab === 'standards'
                 ? 'GA4-Mediums und Funnel-Phasen sind feste System-Standards und schreibgeschützt.'
                 : 'Nur Admins können Einträge in dieser Kategorie anlegen oder ändern.'}
+            </div>
+          )}
+
+          {isSourceTab && (
+            <div className="relative">
+              <input
+                type="text"
+                value={listSearch}
+                onChange={(e) => setListSearch(e.target.value)}
+                placeholder="Liste durchsuchen (Name oder Tracking-ID)..."
+                className="w-full pl-10"
+              />
+              <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             </div>
           )}
 

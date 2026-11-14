@@ -12,7 +12,7 @@ export const ALLOWED_MEDIUMS = [
 
 export const ALLOWED_FUNNELS = ['tofu', 'mofu', 'bofu', 'retargeting'];
 
-export const SOURCE_CATEGORIES = ['digital', 'publisher', 'offline', 'partner', 'event'];
+export const SOURCE_CATEGORIES = ['digital', 'publisher', 'offline', 'partner', 'location', 'event'];
 export const USER_CREATABLE_SOURCE_CATEGORIES = ['partner', 'event'];
 export const COMPONENT_TYPES = ['medium', 'topic', 'audience', 'funnel', 'angle', 'format'];
 

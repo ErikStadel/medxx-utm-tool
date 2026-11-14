@@ -25,6 +25,15 @@ import {
   validateFullUtmState,
 } from '../utils/utmValidation';
 
+const STANDARD_CATEGORIES = ['digital', 'publisher', 'offline'];
+
+const SOURCE_MODES = [
+  { id: 'standard', label: 'Standard-Sources' },
+  { id: 'partner', label: 'Service-Partner' },
+  { id: 'location', label: 'Standort / NL' },
+  { id: 'event', label: 'Messe / Event' },
+];
+
 const UTMBuilder = ({
   campaigns,
   sources = [],
@@ -36,6 +45,7 @@ const UTMBuilder = ({
 }) => {
   const [baseUrl, setBaseUrl] = useState('https://medatixx.de');
   const [medium, setMedium] = useState('');
+  const [sourceMode, setSourceMode] = useState('standard');
   const [source, setSource] = useState('');
   const [sourceSearch, setSourceSearch] = useState('');
   const [topic, setTopic] = useState('');
@@ -83,42 +93,46 @@ const UTMBuilder = ({
     [sources]
   );
 
-  const filteredSources = useMemo(() => {
-    const q = sourceSearch.trim().toLowerCase();
-    if (!q) return activeSources;
-    return activeSources.filter(
-      (s) =>
-        s.slug.toLowerCase().includes(q) ||
-        s.label.toLowerCase().includes(q) ||
-        s.category.toLowerCase().includes(q)
-    );
-  }, [activeSources, sourceSearch]);
+  const sourceCounts = useMemo(
+    () => ({
+      standard: activeSources.filter((s) => STANDARD_CATEGORIES.includes(s.category)).length,
+      partner: activeSources.filter((s) => s.category === 'partner').length,
+      location: activeSources.filter((s) => s.category === 'location').length,
+      event: activeSources.filter((s) => s.category === 'event').length,
+    }),
+    [activeSources]
+  );
 
-  const groupedSources = useMemo(() => {
+  const standardSources = useMemo(() => {
+    const list = activeSources.filter((s) => STANDARD_CATEGORIES.includes(s.category));
     const recommended = [];
-    const byCategory = {
-      digital: [],
-      publisher: [],
-      offline: [],
-      partner: [],
-      event: [],
-    };
+    const byCategory = { digital: [], publisher: [], offline: [] };
 
-    filteredSources.forEach((s) => {
+    list.forEach((s) => {
       const isCompatible =
         medium &&
         ((Array.isArray(s.allowed_mediums) && s.allowed_mediums.includes(medium)) ||
           s.default_medium === medium);
-      if (isCompatible) {
-        recommended.push(s);
-      }
-      if (byCategory[s.category]) {
-        byCategory[s.category].push(s);
-      }
+      if (isCompatible) recommended.push(s);
+      if (byCategory[s.category]) byCategory[s.category].push(s);
     });
 
     return { recommended, byCategory };
-  }, [filteredSources, medium]);
+  }, [activeSources, medium]);
+
+  const subListSources = useMemo(() => {
+    if (sourceMode === 'standard') return [];
+    const q = sourceSearch.trim().toLowerCase();
+    return activeSources
+      .filter((s) => s.category === sourceMode)
+      .filter(
+        (s) =>
+          !q ||
+          s.label.toLowerCase().includes(q) ||
+          s.slug.toLowerCase().includes(q)
+      )
+      .sort((a, b) => a.label.localeCompare(b.label, 'de'));
+  }, [activeSources, sourceMode, sourceSearch]);
 
   const resolvedTerm = useMemo(() => {
     if (termMode === 'none') return '';
@@ -225,8 +239,26 @@ const UTMBuilder = ({
     [source, medium, topic, audience, funnel, angle, format, resolvedTerm]
   );
 
+  const switchSourceMode = (nextMode) => {
+    setSourceMode(nextMode);
+    setSourceSearch('');
+    const currentObj = activeSources.find((s) => s.slug === source);
+    if (nextMode === 'standard') {
+      if (currentObj && !STANDARD_CATEGORIES.includes(currentObj.category)) {
+        setSource('');
+      }
+    } else if (!currentObj || currentObj.category !== nextMode) {
+      setSource('');
+    }
+    setSaveSuccess(false);
+  };
+
   const handleApplyPreset = (preset) => {
     if (preset.medium) setMedium(preset.medium);
+    if (preset.sourceMode) {
+      setSourceMode(preset.sourceMode);
+      setSourceSearch('');
+    }
     if (preset.source) setSource(preset.source);
     else setSource('');
     if (preset.topic) setTopic(preset.topic);
@@ -244,6 +276,7 @@ const UTMBuilder = ({
 
   const handleReset = () => {
     setMedium('');
+    setSourceMode('standard');
     setSource('');
     setSourceSearch('');
     setTopic('');
@@ -260,9 +293,15 @@ const UTMBuilder = ({
     setSaveError('');
   };
 
-  const handleSourceChange = (nextSlug) => {
-    setSource(nextSlug);
-    const found = activeSources.find((s) => s.slug === nextSlug);
+  const handleSourceChange = (nextValue) => {
+    if (nextValue.startsWith('__mode:')) {
+      const targetMode = nextValue.replace('__mode:', '');
+      switchSourceMode(targetMode);
+      return;
+    }
+
+    setSource(nextValue);
+    const found = activeSources.find((s) => s.slug === nextValue);
     if (found) {
       if (!medium && found.default_medium) {
         setMedium(found.default_medium);
@@ -397,13 +436,13 @@ const UTMBuilder = ({
             )}
           </div>
 
-          {/* 1. Fundament: utm_medium & utm_source */}
+          {/* 1. Fundament: utm_medium & utm_source (2-stufig) */}
           <div className="p-4 rounded-lg bg-gray-800/60 border border-[var(--border-color)] space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-base font-semibold">
                 1. Fundament (GA4 Channel-Clustering) *
               </span>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -439,7 +478,7 @@ const UTMBuilder = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
               <div>
                 <label>UTM Medium (GA4-Kanal) *</label>
                 <select
@@ -465,44 +504,107 @@ const UTMBuilder = ({
                 )}
               </div>
 
-              <div>
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <label className="mb-0">UTM Source (Plattform / Partner / Messe) *</label>
-                  <input
-                    type="text"
-                    value={sourceSearch}
-                    onChange={(e) => setSourceSearch(e.target.value)}
-                    placeholder="Filtern..."
-                    className="w-36 py-1 px-2 text-xs"
-                  />
+              <div className="space-y-2">
+                <label className="mb-1">UTM Source (Typ & Absender) *</label>
+
+                {/* Quell-Typ Auswahl */}
+                <div className="flex flex-wrap gap-1.5">
+                  {SOURCE_MODES.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => switchSourceMode(m.id)}
+                      className={`text-xs px-2.5 py-1 rounded-md border transition-colors ${
+                        sourceMode === m.id
+                          ? 'bg-[var(--primary-color)] border-[var(--primary-color)] text-white'
+                          : 'bg-gray-900/60 border-[var(--border-color)] text-gray-300 hover:bg-gray-700'
+                      }`}
+                    >
+                      {m.label} ({sourceCounts[m.id] || 0})
+                    </button>
+                  ))}
                 </div>
-                <select
-                  value={source}
-                  onChange={(e) => handleSourceChange(e.target.value)}
-                  className={validation.errors.source ? 'error' : ''}
-                >
-                  <option value="">-- Source wählen --</option>
-                  {groupedSources.recommended.length > 0 && (
-                    <optgroup label={`Passend zu "${medium}"`}>
-                      {groupedSources.recommended.map((s) => (
-                        <option key={`rec-${s.slug}`} value={s.slug}>
-                          {s.slug} — {s.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {Object.entries(groupedSources.byCategory).map(([cat, list]) =>
-                    list.length > 0 ? (
-                      <optgroup key={cat} label={SOURCE_CATEGORY_LABELS[cat] || cat}>
-                        {list.map((s) => (
-                          <option key={s.slug} value={s.slug}>
+
+                {sourceMode === 'standard' ? (
+                  <select
+                    value={source}
+                    onChange={(e) => handleSourceChange(e.target.value)}
+                    className={validation.errors.source ? 'error' : ''}
+                  >
+                    <option value="">-- Source wählen --</option>
+                    {standardSources.recommended.length > 0 && (
+                      <optgroup label={`Passend zu "${medium}"`}>
+                        {standardSources.recommended.map((s) => (
+                          <option key={`rec-${s.slug}`} value={s.slug}>
                             {s.slug} — {s.label}
                           </option>
                         ))}
                       </optgroup>
-                    ) : null
-                  )}
-                </select>
+                    )}
+                    {Object.entries(standardSources.byCategory).map(([cat, list]) =>
+                      list.length > 0 ? (
+                        <optgroup key={cat} label={SOURCE_CATEGORY_LABELS[cat] || cat}>
+                          {list.map((s) => (
+                            <option key={s.slug} value={s.slug}>
+                              {s.slug} — {s.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ) : null
+                    )}
+                    <optgroup label="Große Listen gezielt öffnen">
+                      <option value="__mode:partner">
+                        Partner auswählen ({sourceCounts.partner} Service-Partner)...
+                      </option>
+                      <option value="__mode:location">
+                        Standort / Niederlassung auswählen ({sourceCounts.location})...
+                      </option>
+                      <option value="__mode:event">
+                        Messe / Event auswählen ({sourceCounts.event})...
+                      </option>
+                    </optgroup>
+                  </select>
+                ) : (
+                  <div className="p-3 rounded-lg bg-gray-900/60 border border-[var(--border-color)] space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-blue-300">
+                        {SOURCE_CATEGORY_LABELS[sourceMode]} ({subListSources.length})
+                      </span>
+                      <input
+                        type="text"
+                        value={sourceSearch}
+                        onChange={(e) => setSourceSearch(e.target.value)}
+                        placeholder={
+                          sourceMode === 'partner'
+                            ? 'Partner suchen (z. B. Bauer, al-data)...'
+                            : 'Liste filtern...'
+                        }
+                        className="w-48 py-1 px-2 text-xs"
+                      />
+                    </div>
+                    <select
+                      value={source}
+                      onChange={(e) => handleSourceChange(e.target.value)}
+                      className={validation.errors.source ? 'error' : ''}
+                    >
+                      <option value="">
+                        -- {SOURCE_CATEGORY_LABELS[sourceMode]} wählen --
+                      </option>
+                      {subListSources.map((s) => (
+                        <option key={s.slug} value={s.slug}>
+                          {s.label} ({s.slug})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {source && !validation.errors.source && (
+                  <p className="text-xs text-[var(--success-color)] mb-0">
+                    Gewählte Tracking-ID: <code className="font-mono">{source}</code>
+                  </p>
+                )}
+
                 {validation.errors.source && (
                   <div className="validation-message error-message">
                     <AlertCircle size={15} className="mr-2 shrink-0" />
@@ -745,7 +847,7 @@ const UTMBuilder = ({
                         setShortlinkUrl(e.target.value);
                         setSaveSuccess(false);
                       }}
-                      placeholder="z. B. medatixx.de/partner-mueller"
+                      placeholder="z. B. medatixx.de/al-data"
                     />
                   </div>
                 </div>
@@ -794,6 +896,11 @@ const UTMBuilder = ({
         initialCategory={sourceModalCategory}
         onCreated={(newSource) => {
           if (onSourceCreated) onSourceCreated(newSource);
+          if (['partner', 'location', 'event'].includes(newSource.category)) {
+            setSourceMode(newSource.category);
+          } else {
+            setSourceMode('standard');
+          }
           setSource(newSource.slug);
           if (!medium && newSource.default_medium) {
             setMedium(newSource.default_medium);

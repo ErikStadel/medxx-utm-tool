@@ -184,4 +184,23 @@ describe('Konzept-Fallbeispiele Validierung', () => {
       term: 'jobtitel-niedergelassen',
     });
   });
+
+  test('akzeptiert alle offiziellen Service-Partner- und Standort-Tracking-IDs', () => {
+    const partnerAndLocationIds = [
+      'al-data', 'as-rheinland', 'bauer-medical', 'nc-neumann', 'comprax',
+      'cs-mentz', 'comretix', 'comservice', 'ddd', 'delfs', 'digital-symptom',
+      'doctago', 'eifert-ds', 'engel', 'erhardt-it', 'fleig-schmieder', 'hms',
+      'hoenicke', 'hoppemed', 'ics-as-burgert', 'ics', 'intrakom', 'it-sh-jerg',
+      'itl-sh', 'kobus-datentechnik', 'lachnit-edv', 'lcs', 'm-its',
+      'medical-future', 'medip-it', 'medis', 'mednext', 'metis',
+      'opitz-computer', 'piwinger-lau', 'reichle', 'richtersystem',
+      'starke-reichert', 'support-four-it', 'sh-bergholz', 'tbs-computer',
+      'topas', 'varicom', 'werremeyer-edv', 'woinke',
+      'nl-nord', 'nl-ost', 'nl-sued', 'nl-west', 'z-ba', 'z-elt',
+    ];
+
+    partnerAndLocationIds.forEach((slug) => {
+      expect(validateUtmSource(slug)).toBeNull();
+    });
+  });
 });

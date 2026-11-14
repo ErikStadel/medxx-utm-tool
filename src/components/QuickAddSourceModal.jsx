@@ -17,7 +17,7 @@ const QuickAddSourceModal = ({
 }) => {
   const isAdmin = user?.role === 'admin';
   const availableCategories = useMemo(
-    () => (isAdmin ? ['partner', 'event', 'publisher', 'digital', 'offline'] : ['partner', 'event']),
+    () => (isAdmin ? ['partner', 'event', 'location', 'publisher', 'digital', 'offline'] : ['partner', 'event']),
     [isAdmin]
   );
 
@@ -27,7 +27,7 @@ const QuickAddSourceModal = ({
   const [label, setLabel] = useState('');
   const [customSlug, setCustomSlug] = useState('');
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
-  const [usePrefix, setUsePrefix] = useState(true);
+  const [usePrefix, setUsePrefix] = useState(false);
   const [defaultMedium, setDefaultMedium] = useState('');
   const [shortlinkPath, setShortlinkPath] = useState('');
   const [error, setError] = useState('');
@@ -40,9 +40,15 @@ const QuickAddSourceModal = ({
     setLabel('');
     setCustomSlug('');
     setSlugManuallyEdited(false);
-    setUsePrefix(true);
+    setUsePrefix(nextCat === 'event');
     setDefaultMedium(
-      nextCat === 'partner' ? 'offline' : nextCat === 'event' ? 'event' : nextCat === 'publisher' ? 'advertorial' : ''
+      nextCat === 'partner' || nextCat === 'location'
+        ? 'offline'
+        : nextCat === 'event'
+          ? 'event'
+          : nextCat === 'publisher'
+            ? 'advertorial'
+            : ''
     );
     setShortlinkPath('');
     setError('');
