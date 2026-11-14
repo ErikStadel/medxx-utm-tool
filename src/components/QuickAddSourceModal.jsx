@@ -30,7 +30,6 @@ const QuickAddSourceModal = ({
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [usePrefix, setUsePrefix] = useState(false);
   const [defaultMedium, setDefaultMedium] = useState('');
-  const [shortlinkPath, setShortlinkPath] = useState('');
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -51,7 +50,6 @@ const QuickAddSourceModal = ({
             ? 'advertorial'
             : ''
     );
-    setShortlinkPath('');
     setError('');
   }, [isOpen, initialCategory, availableCategories]);
 
@@ -86,7 +84,6 @@ const QuickAddSourceModal = ({
           category,
           default_medium: defaultMedium || null,
           allowed_mediums: defaultMedium ? [defaultMedium] : [],
-          shortlink_path: shortlinkPath.trim() || null,
         }),
       });
       const data = await res.json();
@@ -103,13 +100,13 @@ const QuickAddSourceModal = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-      <div className="bg-[var(--card-background)] border border-[var(--border-color)] rounded-xl shadow-2xl w-full max-w-lg p-6">
-        <div className="flex justify-between items-center mb-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-[var(--card-background)] border border-[var(--border-strong)] rounded-2xl shadow-2xl w-full max-w-lg p-6">
+        <div className="flex justify-between items-center mb-5">
           <h3 className="text-lg font-semibold m-0">
             {isAdmin ? 'Neue Source / Partner / Messe anlegen' : 'Neuen Partner / Messe anlegen'}
           </h3>
-          <button type="button" onClick={onClose} className="icon">
+          <button type="button" onClick={onClose} className="icon" aria-label="Schließen">
             <X size={18} />
           </button>
         </div>
@@ -188,42 +185,31 @@ const QuickAddSourceModal = ({
               placeholder="z. B. al-data oder {{site_source_name}}"
             />
             {customSlug && !slugError ? (
-              <p className="text-xs text-[var(--success-color)] mt-1 mb-0 flex items-center gap-1">
-                <CheckCircle2 size={14} /> Gültiger Slug: <code>{customSlug}</code>
+              <p className="text-xs text-[var(--success-color)] mt-1.5 mb-0 flex items-center gap-1.5">
+                <CheckCircle2 size={14} /> Gültiger Slug: <code className="code-chip">{customSlug}</code>
               </p>
             ) : (
               customSlug && (
-                <p className="text-xs text-[var(--error-color)] mt-1 mb-0 flex items-center gap-1">
+                <p className="text-xs text-[var(--error-color)] mt-1.5 mb-0 flex items-center gap-1.5">
                   <AlertCircle size={14} /> {slugError}
                 </p>
               )
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label>Standard-Medium (optional)</label>
-              <select
-                value={defaultMedium}
-                onChange={(e) => setDefaultMedium(e.target.value)}
-              >
-                <option value="">-- Kein Standard --</option>
-                {mediumOptions.map((m) => (
-                  <option key={m.slug} value={m.slug}>
-                    {m.slug}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label>TYPO3 Shortlink (optional)</label>
-              <input
-                type="text"
-                value={shortlinkPath}
-                onChange={(e) => setShortlinkPath(e.target.value)}
-                placeholder="medatixx.de/..."
-              />
-            </div>
+          <div>
+            <label>Standard-Medium (optional)</label>
+            <select
+              value={defaultMedium}
+              onChange={(e) => setDefaultMedium(e.target.value)}
+            >
+              <option value="">-- Kein Standard --</option>
+              {mediumOptions.map((m) => (
+                <option key={m.slug} value={m.slug}>
+                  {m.slug}
+                </option>
+              ))}
+            </select>
           </div>
 
           {error && (
@@ -233,7 +219,7 @@ const QuickAddSourceModal = ({
             </div>
           )}
 
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex justify-end gap-2.5 pt-2">
             <button type="button" onClick={onClose} className="secondary">
               Abbrechen
             </button>

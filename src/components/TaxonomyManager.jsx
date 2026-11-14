@@ -17,7 +17,7 @@ const COMPONENT_TABS = [
   { key: 'audience', label: 'Zielgruppen (Campaign)' },
   { key: 'angle', label: 'Angles (Content)' },
   { key: 'format', label: 'Formate (Content)' },
-  { key: 'standards', label: 'GA4-Standards (Gesperrt)' },
+  { key: 'standards', label: 'System-Standards (Gesperrt)' },
 ];
 
 const TaxonomyManager = ({
@@ -41,7 +41,6 @@ const TaxonomyManager = ({
   const [slugEdited, setSlugEdited] = useState(false);
   const [usePrefix, setUsePrefix] = useState(false);
   const [defaultMedium, setDefaultMedium] = useState('offline');
-  const [shortlinkPath, setShortlinkPath] = useState('');
   const [listSearch, setListSearch] = useState('');
 
   // Component form state
@@ -67,7 +66,6 @@ const TaxonomyManager = ({
     setSourceLabel('');
     setSourceSlug('');
     setSlugEdited(false);
-    setShortlinkPath('');
   };
 
   const handleSourceLabelChange = (val) => {
@@ -108,7 +106,6 @@ const TaxonomyManager = ({
           category: sourceCategory,
           default_medium: defaultMedium || null,
           allowed_mediums: defaultMedium ? [defaultMedium] : [],
-          shortlink_path: shortlinkPath.trim() || null,
         }),
       });
       const data = await res.json();
@@ -117,7 +114,6 @@ const TaxonomyManager = ({
       setSourceLabel('');
       setSourceSlug('');
       setSlugEdited(false);
-      setShortlinkPath('');
       setSuccess(`Source "${data.slug}" gespeichert.`);
     } catch (err) {
       setError(err.message);
@@ -279,23 +275,23 @@ const TaxonomyManager = ({
         <div className="card space-y-6">
           <div>
             <h2 className="mb-1">Neon-Katalog verwalten</h2>
-            <p className="text-sm text-gray-300 mb-0">
+            <p className="text-sm text-[var(--text-muted)] mb-0">
               {isAdmin
-                ? 'Als Admin kannst du Partner, Messen, Sources sowie alle modularen Bausteine verwalten.'
+                ? 'Als Admin kannst du Partner, Messen, Sources, Themen sowie alle modularen Bausteine verwalten.'
                 : 'Standard-Nutzer können hier neue Partner und Messen anlegen. Alle übrigen Bausteine werden von Admins gepflegt.'}
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2 border-b border-[var(--border-color)] pb-3">
+          <div className="flex flex-wrap gap-2 border-b border-[var(--border-color)] pb-4">
             {COMPONENT_TABS.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => handleTabChange(tab.key)}
-                className={`text-xs md:text-sm px-3 py-2 rounded-lg ${
+                className={`text-xs md:text-sm px-3.5 py-2 rounded-lg border transition-colors ${
                   activeTab === tab.key
-                    ? 'bg-[var(--primary-color)] text-white'
-                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    ? 'bg-[var(--primary-color)] border-[var(--primary-color)] text-white shadow-sm'
+                    : 'bg-[var(--secondary-btn-bg)] border-[var(--border-strong)] text-[var(--text-color)] hover:bg-[var(--secondary-btn-hover)]'
                 }`}
               >
                 {tab.label}
@@ -319,16 +315,13 @@ const TaxonomyManager = ({
           {/* Create Form */}
           {canCreateOnTab ? (
             isSourceTab ? (
-              <form
-                onSubmit={handleCreateSource}
-                className="p-4 rounded-lg bg-gray-800/60 border border-[var(--border-color)] space-y-4"
-              >
+              <form onSubmit={handleCreateSource} className="section-panel">
                 <h3 className="m-0">
                   {activeTab === 'partner_event' ? 'Neuen Partner oder Messe anlegen' : 'Neue Source anlegen (Admin)'}
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label>Kategorie</label>
+                    <label className="field-label">Kategorie</label>
                     <select
                       value={sourceCategory}
                       onChange={(e) => {
@@ -357,7 +350,7 @@ const TaxonomyManager = ({
                     </select>
                   </div>
                   <div>
-                    <label>Anzeigename</label>
+                    <label className="field-label">Anzeigename</label>
                     <input
                       type="text"
                       value={sourceLabel}
@@ -366,7 +359,7 @@ const TaxonomyManager = ({
                     />
                   </div>
                   <div>
-                    <label>UTM-Slug (normalisiert)</label>
+                    <label className="field-label">UTM-Slug (normalisiert)</label>
                     <input
                       type="text"
                       value={sourceSlug}
@@ -383,9 +376,9 @@ const TaxonomyManager = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
                   <div>
-                    <label>Standard-Medium</label>
+                    <label className="field-label">Standard-Medium</label>
                     <select value={defaultMedium} onChange={(e) => setDefaultMedium(e.target.value)}>
                       <option value="">-- Kein Standard --</option>
                       {mediumOptions.map((m) => (
@@ -395,16 +388,7 @@ const TaxonomyManager = ({
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <label>TYPO3 Shortlink (optional)</label>
-                    <input
-                      type="text"
-                      value={shortlinkPath}
-                      onChange={(e) => setShortlinkPath(e.target.value)}
-                      placeholder="medatixx.de/partner-..."
-                    />
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center justify-between gap-3">
                     {activeTab === 'partner_event' && (
                       <label className="flex items-center gap-2 text-xs mb-0 cursor-pointer">
                         <input
@@ -427,29 +411,26 @@ const TaxonomyManager = ({
                 </div>
               </form>
             ) : (
-              <form
-                onSubmit={handleCreateComponent}
-                className="p-4 rounded-lg bg-gray-800/60 border border-[var(--border-color)] space-y-4"
-              >
+              <form onSubmit={handleCreateComponent} className="section-panel">
                 <h3 className="m-0">Neuen Baustein anlegen ({activeTab})</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                   <div>
-                    <label>Slug (wird automatisch normalisiert)</label>
+                    <label className="field-label">Slug (wird automatisch normalisiert)</label>
                     <input
                       type="text"
                       value={compSlug}
                       onChange={(e) => setCompSlug(normalizeSlug(e.target.value))}
                       className="font-mono text-sm"
-                      placeholder="z. B. epa-2026"
+                      placeholder="z. B. regulatorik-2027"
                     />
                   </div>
                   <div>
-                    <label>Beschreibung / Hilfetext</label>
+                    <label className="field-label">Beschreibung / Hilfetext</label>
                     <input
                       type="text"
                       value={compDescription}
                       onChange={(e) => setCompDescription(e.target.value)}
-                      placeholder="z. B. ePA-Kampagne für Niedergelassene"
+                      placeholder="z. B. Regulatorik-Kampagne 2027"
                     />
                   </div>
                   <div>
@@ -461,10 +442,10 @@ const TaxonomyManager = ({
               </form>
             )
           ) : (
-            <div className="p-3 rounded-lg bg-gray-800/40 border border-[var(--border-color)] text-xs text-gray-300 flex items-center gap-2">
+            <div className="p-4 rounded-xl bg-[var(--section-background)] border border-[var(--border-color)] text-xs text-[var(--text-muted)] flex items-center gap-2">
               <Lock size={14} />
               {activeTab === 'standards'
-                ? 'GA4-Mediums und Funnel-Phasen sind feste System-Standards und schreibgeschützt.'
+                ? 'Mediums und Funnel-Phasen sind feste System-Standards und schreibgeschützt.'
                 : 'Nur Admins können Einträge in dieser Kategorie anlegen oder ändern.'}
             </div>
           )}
@@ -478,12 +459,12 @@ const TaxonomyManager = ({
                 placeholder="Liste durchsuchen (Name oder Tracking-ID)..."
                 className="w-full pl-10"
               />
-              <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Search size={16} className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-[var(--text-muted)]" />
             </div>
           )}
 
           {/* Table / List */}
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {isSourceTab
               ? displayedSources.map((item) => {
                   const canManage =
@@ -492,26 +473,21 @@ const TaxonomyManager = ({
                   return (
                     <div
                       key={item.id}
-                      className={`flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg border border-[var(--border-color)] ${
-                        item.is_active ? 'bg-gray-800/70' : 'bg-gray-900/50 opacity-60'
+                      className={`item-card flex flex-wrap items-center justify-between gap-3 ${
+                        item.is_active ? '' : 'opacity-60'
                       }`}
                     >
                       <div>
-                        <div className="flex items-center gap-2">
-                          <code className="font-mono text-sm text-green-300">{item.slug}</code>
-                          <span className="text-sm text-white">{item.label}</span>
-                          <span className="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <code className="code-chip font-semibold">{item.slug}</code>
+                          <span className="text-sm font-medium text-[var(--text-color)]">{item.label}</span>
+                          <span className="pill-badge pill-gray">
                             {SOURCE_CATEGORY_LABELS[item.category] || item.category}
                           </span>
-                          {!item.is_active && (
-                            <span className="text-xs px-2 py-0.5 rounded bg-red-900/60 text-red-200">
-                              Inaktiv
-                            </span>
-                          )}
+                          {!item.is_active && <span className="pill-badge pill-red">Inaktiv</span>}
                         </div>
-                        <div className="text-xs text-gray-400 mt-0.5">
+                        <div className="text-xs text-[var(--text-muted)] mt-1">
                           Standard-Medium: {item.default_medium || '—'}
-                          {item.shortlink_path ? ` • Shortlink: ${item.shortlink_path}` : ''}
                           {` • Erstellt von: ${item.created_by || 'system'}`}
                         </div>
                       </div>
@@ -521,7 +497,7 @@ const TaxonomyManager = ({
                           <button
                             type="button"
                             onClick={() => toggleSourceActive(item)}
-                            className="icon text-amber-300"
+                            className="icon text-[var(--warning-color)]"
                             title={item.is_active ? 'Deaktivieren' : 'Aktivieren'}
                           >
                             <Power size={15} />
@@ -542,26 +518,24 @@ const TaxonomyManager = ({
               : displayedComponents.map((item) => (
                   <div
                     key={item.id}
-                    className={`flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg border border-[var(--border-color)] ${
-                      item.is_active ? 'bg-gray-800/70' : 'bg-gray-900/50 opacity-60'
+                    className={`item-card flex flex-wrap items-center justify-between gap-3 ${
+                      item.is_active ? '' : 'opacity-60'
                     }`}
                   >
                     <div>
-                      <div className="flex items-center gap-2">
-                        <code className="font-mono text-sm text-blue-300">{item.slug}</code>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <code className="code-chip font-semibold">{item.slug}</code>
                         {activeTab === 'standards' && (
-                          <span className="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300">
-                            {item.component_type}
-                          </span>
+                          <span className="pill-badge pill-gray">{item.component_type}</span>
                         )}
                         {item.is_locked && (
-                          <span className="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300 inline-flex items-center gap-1">
+                          <span className="pill-badge pill-gray inline-flex items-center gap-1">
                             <Lock size={11} /> Geschützt
                           </span>
                         )}
                       </div>
                       {item.description && (
-                        <div className="text-xs text-gray-400 mt-0.5">{item.description}</div>
+                        <div className="text-xs text-[var(--text-muted)] mt-1">{item.description}</div>
                       )}
                     </div>
 
@@ -570,7 +544,7 @@ const TaxonomyManager = ({
                         <button
                           type="button"
                           onClick={() => toggleComponentActive(item)}
-                          className="icon text-amber-300"
+                          className="icon text-[var(--warning-color)]"
                           title={item.is_active ? 'Deaktivieren' : 'Aktivieren'}
                         >
                           <Power size={15} />

@@ -1,10 +1,31 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LogOut, Menu, X, Link2, Layers, Database, Shield, Wrench } from 'lucide-react';
+import {
+  LogOut,
+  Menu,
+  X,
+  Link2,
+  Layers,
+  Database,
+  Shield,
+  Wrench,
+  Sun,
+  Moon,
+} from 'lucide-react';
+import { applyTheme, getInitialTheme } from '../utils/theme';
 
 const LayoutHeader = ({ title, user, onLogout }) => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [theme, setTheme] = useState(() => getInitialTheme());
   const location = useLocation();
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
 
   const navItems = [
     { to: '/', label: 'UTM Builder', icon: Wrench },
@@ -19,13 +40,16 @@ const LayoutHeader = ({ title, user, onLogout }) => {
 
   return (
     <>
-      <header className="bg-[var(--card-background)] border-b border-[var(--border-color)] p-4">
+      <header className="bg-[var(--card-background)] border-b border-[var(--border-color)] py-3.5 px-4 transition-colors">
         <div className="container flex justify-between items-center gap-4">
           <div className="flex items-center gap-6">
-            <Link to="/" className="text-xl md:text-2xl font-bold text-[var(--text-color)] hover:text-[var(--primary-color)] transition-colors">
+            <Link
+              to="/"
+              className="text-lg sm:text-xl font-bold text-[var(--text-color)] hover:text-[var(--primary-color)] transition-colors whitespace-nowrap"
+            >
               {title}
             </Link>
-            <nav className="hidden lg:flex items-center gap-2">
+            <nav className="hidden lg:flex items-center gap-1.5">
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const active = location.pathname === item.to;
@@ -33,10 +57,10 @@ const LayoutHeader = ({ title, user, onLogout }) => {
                   <Link
                     key={item.to}
                     to={item.to}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors ${
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors whitespace-nowrap ${
                       active
-                        ? 'bg-[var(--primary-color)] text-white'
-                        : 'text-[var(--accent-color)] hover:bg-gray-700'
+                        ? 'bg-[var(--primary-color)] text-white shadow-sm'
+                        : 'text-[var(--accent-color)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-color)]'
                     }`}
                   >
                     <Icon size={15} />
@@ -46,43 +70,81 @@ const LayoutHeader = ({ title, user, onLogout }) => {
               })}
             </nav>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs md:text-sm text-[var(--accent-color)]">
+          <div className="flex items-center gap-2.5">
+            <span className="hidden sm:inline text-xs md:text-sm text-[var(--text-muted)]">
               {user.name} ({user.role})
             </span>
-            <button onClick={onLogout} className="icon text-red-400 hover:text-red-300" title="Abmelden">
-              <LogOut size={18} />
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="icon flex items-center gap-1.5 text-xs px-2.5 py-1.5"
+              title={theme === 'dark' ? 'Zum Bright Theme wechseln' : 'Zum Dark Theme wechseln'}
+              aria-label={theme === 'dark' ? 'Zum Bright Theme wechseln' : 'Zum Dark Theme wechseln'}
+            >
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+              <span className="hidden md:inline">{theme === 'dark' ? 'Bright' : 'Dark'}</span>
             </button>
-            <button onClick={() => setMenuOpen(!menuOpen)} className="icon lg:hidden" title="Menü">
-              <Menu size={22} />
+            <button
+              type="button"
+              onClick={onLogout}
+              className="danger icon"
+              title="Abmelden"
+              aria-label="Abmelden"
+            >
+              <LogOut size={17} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="icon lg:hidden"
+              title="Menü"
+              aria-label="Menü"
+            >
+              <Menu size={20} />
             </button>
           </div>
         </div>
       </header>
 
       <div className={`menu ${menuOpen ? 'menu-open' : ''}`}>
-        <button onClick={() => setMenuOpen(false)} className="icon absolute top-4 right-4">
-          <X size={24} />
+        <button
+          type="button"
+          onClick={() => setMenuOpen(false)}
+          className="icon absolute top-4 right-4"
+          aria-label="Menü schließen"
+        >
+          <X size={20} />
         </button>
-        <div className="mt-12">
+        <div className="mt-16 px-2 space-y-1">
           {navItems.map((item) => (
             <Link
               key={item.to}
               to={item.to}
               onClick={() => setMenuOpen(false)}
-              className="menu-item"
+              className="menu-item rounded-lg"
             >
               {item.label}
             </Link>
           ))}
           <button
+            type="button"
+            onClick={() => {
+              toggleTheme();
+            }}
+            className="menu-item rounded-lg text-left w-full flex items-center gap-2"
+          >
+            {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+            {theme === 'dark' ? 'Bright Theme aktivieren' : 'Dark Theme aktivieren'}
+          </button>
+          <button
+            type="button"
             onClick={() => {
               setMenuOpen(false);
               onLogout();
             }}
-            className="menu-item text-left text-red-400 w-full mt-4 flex items-center gap-2"
+            className="menu-item rounded-lg text-left text-[var(--error-color)] w-full mt-4 flex items-center gap-2"
           >
-            <LogOut size={18} /> Abmelden
+            <LogOut size={17} /> Abmelden
           </button>
         </div>
       </div>

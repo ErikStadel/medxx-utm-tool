@@ -1,10 +1,17 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { Sun, Moon } from 'lucide-react';
+import { applyTheme, getInitialTheme } from '../utils/theme';
 
 const Login = ({ onLogin }) => {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [theme, setTheme] = useState(() => getInitialTheme());
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
 
   const handleLogin = async () => {
     if (!name.trim() || !password) {
@@ -40,37 +47,47 @@ const Login = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--background-color)]">
-      <div className="card p-8 w-full max-w-md shadow-xl border border-[var(--border-color)]">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--background-color)] p-4 relative">
+      <button
+        type="button"
+        onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+        className="icon fixed top-4 right-4 flex items-center gap-1.5 text-xs px-3 py-1.5"
+        title={theme === 'dark' ? 'Zum Bright Theme wechseln' : 'Zum Dark Theme wechseln'}
+      >
+        {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+        <span>{theme === 'dark' ? 'Bright' : 'Dark'}</span>
+      </button>
+
+      <div className="card p-8 w-full max-w-md">
         <h1 className="text-2xl mb-2 text-center font-bold">medxx-utm-tool</h1>
-        <p className="text-center text-sm text-gray-400 mb-6">Bitte mit Benutzername und Passwort anmelden</p>
-        <div className="space-y-4 mb-4">
+        <p className="text-center text-sm text-[var(--text-muted)] mb-6">
+          Bitte mit Benutzername und Passwort anmelden
+        </p>
+        <div className="space-y-4 mb-5">
           <div>
-            <label className="block text-sm font-medium mb-1">Benutzername</label>
+            <label>Benutzername</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="z.B. admin oder mitarbeiter"
-              className="w-full p-2 border rounded-lg"
+              placeholder="z. B. admin oder mitarbeiter"
               autoFocus
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Passwort</label>
+            <label>Passwort</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Passwort"
-              className="w-full p-2 border rounded-lg"
             />
           </div>
         </div>
-        {error && <p className="error-message mb-4 text-center text-red-500 text-sm">{error}</p>}
-        <button onClick={handleLogin} className="primary w-full" disabled={isLoading}>
+        {error && <div className="validation-message error-message mb-4">{error}</div>}
+        <button type="button" onClick={handleLogin} className="primary w-full" disabled={isLoading}>
           {isLoading ? 'Anmelden...' : 'Anmelden'}
         </button>
       </div>

@@ -279,32 +279,12 @@ export function validateFullUtmState(
 
   if (state.medium === 'offline') {
     warnings.offline =
-      'Offline-Pro-Tipp: Für QR-Codes auf Rollups oder Print-Mailings eine TYPO3-Short-URL auf diese UTM-URL weiterleiten und unten dokumentieren.';
+      'Hinweis Offline-Tracking: Diese fertige UTM-URL kann extern (z. B. für QR-Codes auf Rollups oder Print-Mailings) weitergeleitet werden.';
   }
 
   return {
     isValid: Object.keys(errors).length === 0,
     errors,
     warnings,
-  };
-}
-
-/**
- * Erzeugt die Vorschau, wie Looker Studio / GA4 die Parameter anhand von "_" aufteilt.
- */
-export function getLookerStudioPreview({ source, medium, topic, audience, funnel, angle, format, term }) {
-  const campaign = topic && audience && funnel ? `${topic}_${audience}_${funnel}` : '';
-  const content = angle && format ? `${angle}_${format}` : '';
-  return {
-    source: source || '—',
-    medium: medium || '—',
-    campaign: campaign || '—',
-    topic: topic || '—',
-    audience: audience || '—',
-    funnel: funnel || '—',
-    content: content || '—',
-    angle: angle || '—',
-    format: format || '—',
-    term: term || '—',
   };
 }

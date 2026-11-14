@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { CheckCircle2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Plus } from 'lucide-react';
 import { validateUtmCampaignParts } from '../utils/utmValidation';
 
 const CampaignModuleSelector = ({
@@ -13,6 +13,8 @@ const CampaignModuleSelector = ({
   campaigns = [],
   onSelectFromLibrary,
   showLibraryPicker = true,
+  canAddTopic = false,
+  onOpenAddTopic,
 }) => {
   const assembledCampaign = topic && audience && funnel ? `${topic}_${audience}_${funnel}` : '';
   const validationError =
@@ -31,43 +33,57 @@ const CampaignModuleSelector = ({
   }, [campaigns]);
 
   return (
-    <div className="p-4 rounded-lg bg-gray-800/60 border border-[var(--border-color)] space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="section-panel">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <label className="mb-0 text-base font-semibold">
-            UTM Campaign * <span className="text-xs font-normal text-gray-400">([Thema]_[Zielgruppe]_[Funnel])</span>
+            2. UTM Campaign *{' '}
+            <span className="text-xs font-normal text-[var(--text-muted)]">
+              ([Thema]_[Zielgruppe]_[Funnel])
+            </span>
           </label>
         </div>
 
-        {showLibraryPicker && sortedCampaigns.length > 0 && (
-          <div className="w-full md:w-72">
-            <select
-              value=""
-              onChange={(e) => {
-                if (e.target.value && onSelectFromLibrary) {
-                  onSelectFromLibrary(e.target.value);
-                }
-              }}
-              className="py-2 text-sm"
+        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto justify-end">
+          {canAddTopic && onOpenAddTopic && (
+            <button
+              type="button"
+              onClick={onOpenAddTopic}
+              className="secondary text-xs flex items-center gap-1.5 py-2 px-3"
             >
-              <option value="">-- Aus Kampagnen-Bibliothek laden --</option>
-              {sortedCampaigns.map((c) => (
-                <option key={c.id} value={c.name}>
-                  {c.name} ({c.inhaber})
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+              <Plus size={14} /> Thema anlegen (Admin)
+            </button>
+          )}
+
+          {showLibraryPicker && sortedCampaigns.length > 0 && (
+            <div className="w-full sm:w-72">
+              <select
+                value=""
+                onChange={(e) => {
+                  if (e.target.value && onSelectFromLibrary) {
+                    onSelectFromLibrary(e.target.value);
+                  }
+                }}
+                className="py-2 text-sm"
+              >
+                <option value="">-- Aus Kampagnen-Bibliothek laden --</option>
+                {sortedCampaigns.map((c) => (
+                  <option key={c.id} value={c.name}>
+                    {c.name} ({c.inhaber})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <div>
-          <label className="text-xs uppercase tracking-wide text-gray-400">1. Thema *</label>
+          <label className="field-label">1. Thema *</label>
           <select
             value={topic}
             onChange={(e) => onChangePart('topic', e.target.value)}
-            className={!topic ? 'border-gray-600' : ''}
           >
             <option value="">-- Thema wählen --</option>
             {topics.map((item) => (
@@ -79,11 +95,10 @@ const CampaignModuleSelector = ({
         </div>
 
         <div>
-          <label className="text-xs uppercase tracking-wide text-gray-400">2. Zielgruppe *</label>
+          <label className="field-label">2. Zielgruppe *</label>
           <select
             value={audience}
             onChange={(e) => onChangePart('audience', e.target.value)}
-            className={!audience ? 'border-gray-600' : ''}
           >
             <option value="">-- Zielgruppe wählen --</option>
             {audiences.map((item) => (
@@ -95,11 +110,10 @@ const CampaignModuleSelector = ({
         </div>
 
         <div>
-          <label className="text-xs uppercase tracking-wide text-gray-400">3. Funnel *</label>
+          <label className="field-label">3. Funnel *</label>
           <select
             value={funnel}
             onChange={(e) => onChangePart('funnel', e.target.value)}
-            className={!funnel ? 'border-gray-600' : ''}
           >
             <option value="">-- Funnel wählen --</option>
             {funnels.map((item) => (
@@ -116,14 +130,14 @@ const CampaignModuleSelector = ({
           <div className="flex items-center gap-2 text-sm text-[var(--success-color)]">
             <CheckCircle2 size={16} />
             <span>Ergebnis:</span>
-            <code className="px-2 py-0.5 rounded bg-gray-900 border border-green-700/50 text-green-300 font-mono">
-              {assembledCampaign}
-            </code>
+            <code className="code-chip">{assembledCampaign}</code>
           </div>
         ) : (
-          <div className="flex items-center gap-2 text-xs text-amber-300">
-            <AlertCircle size={15} />
-            <span>{validationError}</span>
+          <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+            <AlertCircle size={14} className={validationError && (topic || audience || funnel) ? 'text-[var(--error-color)]' : ''} />
+            <span className={validationError && (topic || audience || funnel) ? 'text-[var(--error-color)]' : ''}>
+              {validationError}
+            </span>
           </div>
         )}
       </div>

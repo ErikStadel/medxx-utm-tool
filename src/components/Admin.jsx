@@ -230,7 +230,7 @@ const Admin = ({ user, onLogout }) => {
                 </thead>
                 <tbody>
                   {users.map((u, index) => (
-                    <tr key={u.id} className={`border-t border-[var(--border-color)] ${index % 2 === 0 ? 'bg-gray-800' : ''}`}>
+                    <tr key={u.id} className={`border-t border-[var(--border-color)] ${index % 2 === 0 ? 'bg-[var(--section-background)]' : ''}`}>
                       <td className="p-2 break-words">
                         {editingUser?.id === u.id ? (
                           <input
@@ -276,7 +276,7 @@ const Admin = ({ user, onLogout }) => {
                               <button onClick={handleUpdateUser} className="icon text-[var(--success-color)]" disabled={isLoading}>
                                 <Check size={16} />
                               </button>
-                              <button onClick={() => setEditingUser(null)} className="icon text-blue-300" disabled={isLoading}>
+                              <button onClick={() => setEditingUser(null)} className="icon text-[var(--primary-color)]" disabled={isLoading}>
                                 <X size={16} />
                               </button>
                             </>
@@ -284,7 +284,7 @@ const Admin = ({ user, onLogout }) => {
                             <>
                               <button
                                 onClick={() => setEditingUser({ id: u.id, name: u.name, role: u.role, password: '' })}
-                                className="icon text-blue-300"
+                                className="icon text-[var(--primary-color)]"
                                 disabled={isLoading}
                                 title="Bearbeiten"
                               >

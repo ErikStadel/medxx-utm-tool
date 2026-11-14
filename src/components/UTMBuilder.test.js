@@ -236,3 +236,81 @@ test('wechselt bei advertorial auf Fachportale/Publisher und speichert neuen Pub
     })
   );
 });
+
+test('entfernt Looker Studio Check und TYPO3 Shortlink, ermöglicht Theme-Wechsel und Thema-Anlage nur für Admins', async () => {
+  window.localStorage.clear();
+
+  // Standard-User sieht kein "Thema anlegen (Admin)", keinen Looker Studio Check und keinen TYPO3 Shortlink
+  const { unmount } = render(
+    <MemoryRouter>
+      <UTMBuilder
+        campaigns={[]}
+        sources={mockSources}
+        components={mockComponents}
+        user={{ name: 'tester', role: 'standard' }}
+        onLogout={() => {}}
+      />
+    </MemoryRouter>
+  );
+
+  expect(screen.queryByText(/Looker Studio & GA4 Check-Vorschau/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/TYPO3 Shortlink/i)).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Thema anlegen/i })).not.toBeInTheDocument();
+
+  // Bright Theme umschalten
+  const themeBtn = screen.getByRole('button', { name: /Zum Bright Theme wechseln/i });
+  fireEvent.click(themeBtn);
+  expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+
+  unmount();
+
+  // Admin kann direkt ein neues Thema anlegen
+  const onComponentCreated = jest.fn();
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          id: 99,
+          component_type: 'topic',
+          slug: 'neues-thema-2027',
+          label: 'neues-thema-2027',
+          description: 'Neues Thema 2027',
+          is_active: true,
+        }),
+    })
+  );
+
+  render(
+    <MemoryRouter>
+      <UTMBuilder
+        campaigns={[]}
+        sources={mockSources}
+        components={mockComponents}
+        onComponentCreated={onComponentCreated}
+        user={{ name: 'admin', role: 'admin' }}
+        onLogout={() => {}}
+      />
+    </MemoryRouter>
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: /Thema anlegen \(Admin\)/i }));
+  fireEvent.change(screen.getByPlaceholderText(/z\. B\. Regulatorik 2027/i), {
+    target: { value: 'Neues Thema 2027' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: /Thema in Neon speichern/i }));
+
+  await waitFor(() => {
+    expect(onComponentCreated).toHaveBeenCalledWith(
+      expect.objectContaining({ component_type: 'topic', slug: 'neues-thema-2027' })
+    );
+  });
+
+  expect(global.fetch).toHaveBeenCalledWith(
+    '/api/taxonomy',
+    expect.objectContaining({
+      method: 'POST',
+      body: expect.stringContaining('"component_type":"topic"'),
+    })
+  );
+});

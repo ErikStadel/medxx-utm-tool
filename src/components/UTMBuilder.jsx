@@ -14,9 +14,9 @@ import LayoutHeader from './LayoutHeader';
 import CampaignModuleSelector from './CampaignModuleSelector';
 import ContentModuleSelector from './ContentModuleSelector';
 import QuickAddSourceModal from './QuickAddSourceModal';
+import QuickAddTopicModal from './QuickAddTopicModal';
 import {
   SOURCE_CATEGORY_LABELS,
-  getLookerStudioPreview,
   normalizeSlug,
   validateFullUtmState,
 } from '../utils/utmValidation';
@@ -44,6 +44,7 @@ const UTMBuilder = ({
   sources = [],
   components = [],
   onSourceCreated,
+  onComponentCreated,
   onLinkSaved,
   user,
   onLogout,
@@ -66,7 +67,6 @@ const UTMBuilder = ({
   const [customParams, setCustomParams] = useState('');
 
   const [note, setNote] = useState('');
-  const [shortlinkUrl, setShortlinkUrl] = useState('');
 
   const [copySuccess, setCopySuccess] = useState(false);
   const [copyTemplateSuccess, setCopyTemplateSuccess] = useState(false);
@@ -77,6 +77,7 @@ const UTMBuilder = ({
 
   const [sourceModalOpen, setSourceModalOpen] = useState(false);
   const [sourceModalCategory, setSourceModalCategory] = useState('partner');
+  const [topicModalOpen, setTopicModalOpen] = useState(false);
 
   const activeComponents = useMemo(() => {
     const byType = {
@@ -261,21 +262,6 @@ const UTMBuilder = ({
     return `${cleanBase}${separator}${trackingTemplate}`;
   }, [baseUrl, trackingTemplate]);
 
-  const lookerPreview = useMemo(
-    () =>
-      getLookerStudioPreview({
-        source: effectiveSource,
-        medium,
-        topic,
-        audience,
-        funnel,
-        angle,
-        format,
-        term: resolvedTerm,
-      }),
-    [effectiveSource, medium, topic, audience, funnel, angle, format, resolvedTerm]
-  );
-
   const handleMediumChange = (nextMedium) => {
     setMedium(nextMedium);
     setSourceSearch('');
@@ -366,7 +352,6 @@ const UTMBuilder = ({
     setTermInput('');
     setCustomParams('');
     setNote('');
-    setShortlinkUrl('');
     setSaveSuccess(false);
     setSavedPublisherSlug('');
     setSaveError('');
@@ -393,11 +378,6 @@ const UTMBuilder = ({
     setNewPublisherSlug('');
     setNewPublisherLabel('');
     setSource(nextValue);
-
-    const found = activeSources.find((s) => s.slug === nextValue);
-    if (found?.shortlink_path && !shortlinkUrl) {
-      setShortlinkUrl(found.shortlink_path);
-    }
     setSaveSuccess(false);
     setSavedPublisherSlug('');
   };
@@ -448,7 +428,6 @@ const UTMBuilder = ({
           utm_content: utmContent || null,
           utm_term: resolvedTerm || null,
           custom_params: customParams.trim() || null,
-          shortlink_url: shortlinkUrl.trim() || null,
           note: note.trim() || null,
           new_publisher: isNewPublisher
             ? {
@@ -493,12 +472,12 @@ const UTMBuilder = ({
       <LayoutHeader title="medatixx UTM Builder" user={user} onLogout={onLogout} />
 
       <div className="container content-container">
-        <div className="card space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="card space-y-8">
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--border-color)] pb-5">
             <div>
               <h2 className="mb-1">Modularer UTM-Parameter Generator</h2>
-              <p className="text-sm text-gray-300 mb-0">
-                Alle Bausteine stammen aus Neon und werden per Dropdown nach GA4- & Looker-Studio-Standard zusammengestellt und geprüft.
+              <p className="text-sm text-[var(--text-muted)] mb-0">
+                Alle Bausteine stammen aus Neon und werden per Dropdown nach einheitlichem Standard zusammengestellt und geprüft.
               </p>
             </div>
             <button type="button" onClick={handleReset} className="secondary flex items-center gap-1.5 text-sm">
@@ -507,31 +486,36 @@ const UTMBuilder = ({
           </div>
 
           {/* Base URL */}
-          <div>
-            <label>Ziel-URL (Base URL) *</label>
-            <input
-              type="url"
-              value={baseUrl}
-              onChange={(e) => {
-                setBaseUrl(e.target.value);
-                setSaveSuccess(false);
-              }}
-              placeholder="https://medatixx.de/..."
-              className={validation.errors.baseUrl ? 'error' : ''}
-            />
-            {validation.errors.baseUrl && (
-              <div className="validation-message error-message">
-                <AlertCircle size={15} className="mr-2 shrink-0" />
-                {validation.errors.baseUrl}
-              </div>
-            )}
+          <div className="section-panel">
+            <div>
+              <label className="mb-1 text-base font-semibold">Ziel-URL (Base URL) *</label>
+              <p className="text-xs text-[var(--text-muted)] mb-3">
+                Zielseite auf medatixx.de oder externer Landingpage, an die die UTM-Parameter angehängt werden.
+              </p>
+              <input
+                type="url"
+                value={baseUrl}
+                onChange={(e) => {
+                  setBaseUrl(e.target.value);
+                  setSaveSuccess(false);
+                }}
+                placeholder="https://medatixx.de/..."
+                className={validation.errors.baseUrl ? 'error' : ''}
+              />
+              {validation.errors.baseUrl && (
+                <div className="validation-message error-message">
+                  <AlertCircle size={15} className="mr-2 shrink-0" />
+                  {validation.errors.baseUrl}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* 1. Fundament: ZUERST utm_medium, DANACH erlaubte utm_source */}
-          <div className="p-4 rounded-lg bg-gray-800/60 border border-[var(--border-color)] space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="section-panel">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="text-base font-semibold">
-                1. Fundament (GA4 Channel-Clustering) *
+                1. Fundament (Medium & Source) *
               </span>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -540,7 +524,7 @@ const UTMBuilder = ({
                     setSourceModalCategory('partner');
                     setSourceModalOpen(true);
                   }}
-                  className="secondary text-xs flex items-center gap-1 py-1.5 px-2.5"
+                  className="secondary text-xs flex items-center gap-1.5 py-1.5 px-3"
                 >
                   <Plus size={14} /> Partner anlegen
                 </button>
@@ -550,7 +534,7 @@ const UTMBuilder = ({
                     setSourceModalCategory('event');
                     setSourceModalOpen(true);
                   }}
-                  className="secondary text-xs flex items-center gap-1 py-1.5 px-2.5"
+                  className="secondary text-xs flex items-center gap-1.5 py-1.5 px-3"
                 >
                   <Plus size={14} /> Messe anlegen
                 </button>
@@ -561,7 +545,7 @@ const UTMBuilder = ({
                       setSourceModalCategory('digital');
                       setSourceModalOpen(true);
                     }}
-                    className="secondary text-xs flex items-center gap-1 py-1.5 px-2.5"
+                    className="secondary text-xs flex items-center gap-1.5 py-1.5 px-3"
                   >
                     <Plus size={14} /> Source (Admin)
                   </button>
@@ -569,10 +553,10 @@ const UTMBuilder = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
               {/* Schritt 1: UTM Medium */}
               <div>
-                <label>1. UTM Medium (GA4-Kanal) *</label>
+                <label className="field-label">1. UTM Medium (Kanal) *</label>
                 <select
                   aria-label="UTM Medium"
                   value={medium}
@@ -595,8 +579,8 @@ const UTMBuilder = ({
               </div>
 
               {/* Schritt 2: UTM Source (gefiltert nach erlaubten Sources für das gewählte Medium) */}
-              <div className="space-y-2">
-                <label className="mb-1">2. UTM Source (Passende Absender) *</label>
+              <div className="space-y-3">
+                <label className="field-label mb-1">2. UTM Source (Passende Absender) *</label>
 
                 <div className="flex flex-wrap gap-1.5">
                   {SOURCE_MODES.map((m) => {
@@ -609,10 +593,10 @@ const UTMBuilder = ({
                         type="button"
                         disabled={!medium || !modeAvailable}
                         onClick={() => switchSourceMode(m.id)}
-                        className={`text-xs px-2.5 py-1 rounded-md border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                        className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
                           sourceMode === m.id && medium
-                            ? 'bg-[var(--primary-color)] border-[var(--primary-color)] text-white'
-                            : 'bg-gray-900/60 border-[var(--border-color)] text-gray-300 hover:bg-gray-700'
+                            ? 'bg-[var(--primary-color)] border-[var(--primary-color)] text-white shadow-sm'
+                            : 'bg-[var(--secondary-btn-bg)] border-[var(--border-strong)] text-[var(--text-color)] hover:bg-[var(--secondary-btn-hover)]'
                         }`}
                       >
                         {m.label} ({count})
@@ -674,9 +658,9 @@ const UTMBuilder = ({
                     )}
                   </select>
                 ) : (
-                  <div className="p-3 rounded-lg bg-gray-900/60 border border-[var(--border-color)] space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium text-blue-300">
+                  <div className="subpanel">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-[var(--primary-color)]">
                         {SOURCE_CATEGORY_LABELS[sourceMode]} ({subListSources.length})
                       </span>
                       <input
@@ -690,7 +674,7 @@ const UTMBuilder = ({
                               ? 'Publisher suchen...'
                               : 'Liste filtern...'
                         }
-                        className="w-48 py-1 px-2 text-xs"
+                        className="w-52 py-1.5 px-3 text-xs"
                       />
                     </div>
 
@@ -714,9 +698,9 @@ const UTMBuilder = ({
                     </select>
 
                     {isNewPublisher && (
-                      <div className="pt-2 border-t border-gray-700 space-y-2">
+                      <div className="pt-3 border-t border-[var(--border-color)] space-y-3">
                         <div>
-                          <label className="text-xs text-gray-300">
+                          <label className="text-xs text-[var(--text-muted)]">
                             Neuer Publisher-Slug (Naming Convention: klein, keine Umlaute/Leerzeichen) *
                           </label>
                           <input
@@ -731,7 +715,7 @@ const UTMBuilder = ({
                           />
                         </div>
                         <div>
-                          <label className="text-xs text-gray-300">
+                          <label className="text-xs text-[var(--text-muted)]">
                             Anzeigename im Dropdown (optional)
                           </label>
                           <input
@@ -745,7 +729,7 @@ const UTMBuilder = ({
                             className="text-sm"
                           />
                         </div>
-                        <p className="text-xs text-blue-300 mb-0">
+                        <p className="text-xs text-[var(--info-color)] mb-0">
                           Wird beim Klick auf „Link speichern“ automatisch in Neon eingetragen.
                         </p>
                       </div>
@@ -754,8 +738,8 @@ const UTMBuilder = ({
                 )}
 
                 {effectiveSource && !validation.errors.source && (
-                  <p className="text-xs text-[var(--success-color)] mb-0">
-                    Gewählte Tracking-ID: <code className="font-mono">{effectiveSource}</code>
+                  <p className="text-xs text-[var(--success-color)] mb-0 flex items-center gap-1.5">
+                    Gewählte Tracking-ID: <code className="code-chip">{effectiveSource}</code>
                   </p>
                 )}
 
@@ -772,7 +756,7 @@ const UTMBuilder = ({
                         <button
                           type="button"
                           onClick={() => setNewPublisherSlug(normalizedSuggestion)}
-                          className="text-xs underline font-mono px-2 py-0.5 rounded bg-red-100 text-red-800 hover:bg-red-200"
+                          className="secondary text-xs underline font-mono px-2.5 py-1"
                         >
                           Übernehmen: {normalizedSuggestion}
                         </button>
@@ -806,6 +790,8 @@ const UTMBuilder = ({
             funnels={activeComponents.funnel}
             campaigns={campaigns}
             onSelectFromLibrary={handleSelectCampaignFromLibrary}
+            canAddTopic={user?.role === 'admin'}
+            onOpenAddTopic={() => setTopicModalOpen(true)}
           />
 
           {/* 3. Modulare utm_content */}
@@ -822,9 +808,11 @@ const UTMBuilder = ({
           />
 
           {/* 4. Detail-Parameter utm_term & Benutzerdefiniert */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 rounded-lg bg-gray-800/60 border border-[var(--border-color)] space-y-3">
-              <label className="mb-0 font-semibold">UTM Term (optional – Micro-Targeting / Search)</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="section-panel">
+              <label className="mb-0 text-base font-semibold">
+                4. UTM Term <span className="text-xs font-normal text-[var(--text-muted)]">(optional – Micro-Targeting)</span>
+              </label>
               <select
                 value={termMode}
                 onChange={(e) => {
@@ -858,8 +846,8 @@ const UTMBuilder = ({
                     }
                   />
                   {resolvedTerm && (
-                    <p className="text-xs text-gray-300 mt-1 mb-0">
-                      Normalisiert: <code className="text-green-300">{resolvedTerm}</code>
+                    <p className="text-xs text-[var(--text-muted)] mt-2 mb-0 flex items-center gap-1.5">
+                      Normalisiert: <code className="code-chip">{resolvedTerm}</code>
                     </p>
                   )}
                 </div>
@@ -879,8 +867,10 @@ const UTMBuilder = ({
               )}
             </div>
 
-            <div className="p-4 rounded-lg bg-gray-800/60 border border-[var(--border-color)] space-y-3">
-              <label className="mb-0 font-semibold">Benutzerdefinierte Parameter (optional)</label>
+            <div className="section-panel">
+              <label className="mb-0 text-base font-semibold">
+                Benutzerdefinierte Parameter <span className="text-xs font-normal text-[var(--text-muted)]">(optional)</span>
+              </label>
               <input
                 type="text"
                 value={customParams}
@@ -897,13 +887,13 @@ const UTMBuilder = ({
                   {validation.errors.customParams}
                 </div>
               )}
-              <p className="text-xs text-gray-400 mb-0">
+              <p className="text-xs text-[var(--text-muted)] mb-0">
                 Nur für technische Zusatzparameter verwenden, nicht für Standard-UTM-Dimensionen.
               </p>
             </div>
           </div>
 
-          {/* Offline Shortlink Hinweis */}
+          {/* Offline Hinweis */}
           {validation.warnings.offline && (
             <div className="validation-message info-message">
               <AlertTriangle size={15} className="mr-2 shrink-0" />
@@ -911,48 +901,22 @@ const UTMBuilder = ({
             </div>
           )}
 
-          {/* Looker-Studio Split-Vorschau */}
-          <div className="p-4 rounded-lg bg-gray-900/60 border border-[var(--border-color)]">
-            <h3 className="text-sm font-semibold text-gray-200 mb-3">
-              Looker Studio & GA4 Check-Vorschau (Regex-Split)
-            </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 text-xs">
-              {[
-                ['Source', lookerPreview.source],
-                ['Medium', lookerPreview.medium],
-                ['Thema', lookerPreview.topic],
-                ['Zielgruppe', lookerPreview.audience],
-                ['Funnel', lookerPreview.funnel],
-                ['Angle', lookerPreview.angle],
-                ['Format', lookerPreview.format],
-                ['Term', lookerPreview.term],
-              ].map(([k, v]) => (
-                <div key={k} className="p-2 rounded bg-gray-800 border border-gray-700">
-                  <div className="text-gray-400 text-[11px]">{k}</div>
-                  <div className="font-mono text-gray-100 truncate" title={v}>
-                    {v}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Generierte URL + Link speichern */}
           {canGenerate ? (
-            <div className="generated-url-container space-y-5">
+            <div className="generated-url-container space-y-6">
               <div>
-                <h3>Generierte URL (Check bestanden):</h3>
+                <h3 className="text-base font-semibold mb-2">Generierte URL (Check bestanden)</h3>
                 <div className="flex items-center gap-3">
                   <input
                     type="text"
                     value={fullUrl}
                     readOnly
-                    className="flex-1 px-4 py-3 text-sm font-mono bg-gray-900 border border-[var(--border-color)] rounded-lg"
+                    className="flex-1 text-sm font-mono"
                   />
                   <button
                     type="button"
                     onClick={handleCopyUrl}
-                    className={copySuccess ? 'success' : 'primary'}
+                    className={copySuccess ? 'success py-3 px-4' : 'primary py-3 px-4'}
                     title="URL kopieren"
                   >
                     {copySuccess ? <Check size={16} /> : <Copy size={16} />}
@@ -966,18 +930,18 @@ const UTMBuilder = ({
               </div>
 
               <div>
-                <h3>Tracking-Vorlage (nur Parameter):</h3>
+                <h3 className="text-base font-semibold mb-2">Tracking-Vorlage (nur Parameter)</h3>
                 <div className="flex items-center gap-3">
                   <input
                     type="text"
                     value={trackingTemplate}
                     readOnly
-                    className="flex-1 px-4 py-3 text-sm font-mono bg-gray-900 border border-[var(--border-color)] rounded-lg"
+                    className="flex-1 text-sm font-mono"
                   />
                   <button
                     type="button"
                     onClick={handleCopyTemplate}
-                    className={copyTemplateSuccess ? 'success' : 'secondary'}
+                    className={copyTemplateSuccess ? 'success py-3 px-4' : 'secondary py-3 px-4'}
                     title="Parameter kopieren"
                   >
                     {copyTemplateSuccess ? <Check size={16} /> : <Copy size={16} />}
@@ -991,41 +955,27 @@ const UTMBuilder = ({
               </div>
 
               {/* Link speichern Box */}
-              <div className="pt-4 border-t border-[var(--border-color)] space-y-3">
-                <h3 className="mb-1">Link in Neon speichern</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-gray-300">Notiz / Einsatzort (optional)</label>
-                    <input
-                      type="text"
-                      value={note}
-                      onChange={(e) => {
-                        setNote(e.target.value);
-                        setSaveSuccess(false);
-                      }}
-                      placeholder="z. B. Q4 Partner-Rollup Nord oder LinkedIn Carousel"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-300">TYPO3 Shortlink / Redirect (optional)</label>
-                    <input
-                      type="text"
-                      value={shortlinkUrl}
-                      onChange={(e) => {
-                        setShortlinkUrl(e.target.value);
-                        setSaveSuccess(false);
-                      }}
-                      placeholder="z. B. medatixx.de/al-data"
-                    />
-                  </div>
+              <div className="pt-5 border-t border-[var(--border-color)] space-y-4">
+                <h3 className="mb-0 text-base font-semibold">Link in Neon speichern</h3>
+                <div>
+                  <label className="field-label">Notiz / Einsatzort (optional)</label>
+                  <input
+                    type="text"
+                    value={note}
+                    onChange={(e) => {
+                      setNote(e.target.value);
+                      setSaveSuccess(false);
+                    }}
+                    placeholder="z. B. Q4 Partner-Rollup Nord oder LinkedIn Carousel"
+                  />
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-4">
                   <button
                     type="button"
                     onClick={handleSaveLink}
                     disabled={isSavingLink}
-                    className="primary flex items-center gap-2"
+                    className="primary flex items-center gap-2 px-5 py-2.5"
                   >
                     <BookmarkPlus size={17} />
                     {isSavingLink ? 'Speichert...' : 'Link speichern'}
@@ -1036,10 +986,10 @@ const UTMBuilder = ({
                       ✓ Link gespeichert!
                       {savedPublisherSlug && (
                         <span>
-                          Neuer Publisher <code>{savedPublisherSlug}</code> wurde in Neon eingetragen.
+                          Neuer Publisher <code className="code-chip">{savedPublisherSlug}</code> wurde in Neon eingetragen.
                         </span>
                       )}
-                      <Link to="/links" className="underline inline-flex items-center gap-1 text-blue-300">
+                      <Link to="/links" className="underline inline-flex items-center gap-1 text-[var(--primary-color)]">
                         Alle gespeicherten Links <ExternalLink size={13} />
                       </Link>
                     </span>
@@ -1055,7 +1005,7 @@ const UTMBuilder = ({
               </div>
             </div>
           ) : (
-            <div className="p-4 rounded-lg bg-gray-800/40 border border-dashed border-[var(--border-color)] text-sm text-gray-400">
+            <div className="p-5 rounded-xl bg-[var(--section-background)] border border-dashed border-[var(--border-strong)] text-sm text-[var(--text-muted)]">
               Bitte Base URL, UTM Medium, erlaubte UTM Source sowie alle 3 Bausteine von UTM Campaign (Thema, Zielgruppe, Funnel) gültig auswählen, um die URL zu generieren und zu speichern.
             </div>
           )}
@@ -1084,9 +1034,17 @@ const UTMBuilder = ({
             setSourceMode('standard');
           }
           setSource(newSource.slug);
-          if (newSource.shortlink_path) {
-            setShortlinkUrl(newSource.shortlink_path);
-          }
+        }}
+      />
+
+      <QuickAddTopicModal
+        isOpen={topicModalOpen}
+        onClose={() => setTopicModalOpen(false)}
+        user={user}
+        onCreated={(newTopic) => {
+          if (onComponentCreated) onComponentCreated(newTopic);
+          setTopic(newTopic.slug);
+          setSaveSuccess(false);
         }}
       />
     </div>

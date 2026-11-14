@@ -9,7 +9,6 @@ import {
   validateUtmContentString,
   validateUtmTerm,
   validateFullUtmState,
-  getLookerStudioPreview,
 } from './utmValidation';
 
 describe('normalizeSlug', () => {
@@ -208,31 +207,6 @@ describe('Konzept-Fallbeispiele Validierung', () => {
     });
     expect(offlineResult.isValid).toBe(true);
     expect(offlineResult.warnings.offline).toBeTruthy();
-  });
-
-  test('erzeugt korrekte Looker-Studio-Split-Vorschau', () => {
-    const preview = getLookerStudioPreview({
-      source: 'linkedin',
-      medium: 'paid_social',
-      topic: 'xscribe',
-      audience: 'aerzte-allg',
-      funnel: 'tofu',
-      angle: 'pain',
-      format: 'image',
-      term: 'jobtitel-niedergelassen',
-    });
-    expect(preview).toEqual({
-      source: 'linkedin',
-      medium: 'paid_social',
-      campaign: 'xscribe_aerzte-allg_tofu',
-      topic: 'xscribe',
-      audience: 'aerzte-allg',
-      funnel: 'tofu',
-      content: 'pain_image',
-      angle: 'pain',
-      format: 'image',
-      term: 'jobtitel-niedergelassen',
-    });
   });
 
   test('akzeptiert alle offiziellen Service-Partner- und Standort-Tracking-IDs', () => {

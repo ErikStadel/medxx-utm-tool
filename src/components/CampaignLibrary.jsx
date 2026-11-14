@@ -2,9 +2,17 @@ import React, { useMemo, useState } from 'react';
 import { Copy, Search, Archive, Plus, Trash2, Edit3, Check, X, AlertCircle } from 'lucide-react';
 import LayoutHeader from './LayoutHeader';
 import CampaignModuleSelector from './CampaignModuleSelector';
+import QuickAddTopicModal from './QuickAddTopicModal';
 import { validateUtmCampaignParts } from '../utils/utmValidation';
 
-const CampaignLibrary = ({ campaigns, setCampaigns, components = [], user, onLogout }) => {
+const CampaignLibrary = ({
+  campaigns,
+  setCampaigns,
+  components = [],
+  onComponentCreated,
+  user,
+  onLogout,
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [funnelFilter, setFunnelFilter] = useState('');
   const [showArchived, setShowArchived] = useState(false);
@@ -13,6 +21,7 @@ const CampaignLibrary = ({ campaigns, setCampaigns, components = [], user, onLog
   const [newAudience, setNewAudience] = useState('');
   const [newFunnel, setNewFunnel] = useState('');
   const [newInhaber, setNewInhaber] = useState(user.name);
+  const [topicModalOpen, setTopicModalOpen] = useState(false);
 
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState({ topic: '', audience: '', funnel: '', inhaber: user.name });
@@ -183,10 +192,10 @@ const CampaignLibrary = ({ campaigns, setCampaigns, components = [], user, onLog
       <LayoutHeader title="Kampagnen-Bibliothek" user={user} onLogout={onLogout} />
 
       <div className="container content-container">
-        <div className="card space-y-6">
-          <div>
+        <div className="card space-y-8">
+          <div className="border-b border-[var(--border-color)] pb-4">
             <h2 className="mb-1">Modulare Kampagnen-Bibliothek</h2>
-            <p className="text-sm text-gray-300 mb-0">
+            <p className="text-sm text-[var(--text-muted)] mb-0">
               Neue Kampagnen werden ausschließlich über die Bausteine [Thema]_[Zielgruppe]_[Funnel] angelegt.
             </p>
           </div>
@@ -205,6 +214,8 @@ const CampaignLibrary = ({ campaigns, setCampaigns, components = [], user, onLog
               audiences={byType.audience}
               funnels={byType.funnel}
               showLibraryPicker={false}
+              canAddTopic={user?.role === 'admin'}
+              onOpenAddTopic={() => setTopicModalOpen(true)}
             />
 
             <div className="flex flex-wrap items-center gap-3">
@@ -238,7 +249,7 @@ const CampaignLibrary = ({ campaigns, setCampaigns, components = [], user, onLog
           </div>
 
           {/* Filterleiste */}
-          <div className="flex flex-wrap items-center gap-3 pt-2">
+          <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-[var(--border-color)]">
             <div className="relative flex-1 min-w-[220px]">
               <input
                 type="text"
@@ -247,7 +258,7 @@ const CampaignLibrary = ({ campaigns, setCampaigns, components = [], user, onLog
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10"
               />
-              <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Search size={16} className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-[var(--text-muted)]" />
             </div>
 
             <select
@@ -274,7 +285,7 @@ const CampaignLibrary = ({ campaigns, setCampaigns, components = [], user, onLog
             </label>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-3">
             {filteredCampaigns.map((campaign) => {
               const canModify = user.role === 'admin' || campaign.inhaber === user.name;
               const isEditing = editingId === campaign.id;
@@ -282,12 +293,10 @@ const CampaignLibrary = ({ campaigns, setCampaigns, components = [], user, onLog
               return (
                 <div
                   key={campaign.id}
-                  className={`p-3 rounded-lg border border-[var(--border-color)] ${
-                    campaign.archived ? 'opacity-60 bg-gray-800' : 'bg-[var(--card-background)]'
-                  }`}
+                  className={`item-card ${campaign.archived ? 'opacity-60' : ''}`}
                 >
                   {isEditing ? (
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       <CampaignModuleSelector
                         topic={editDraft.topic}
                         audience={editDraft.audience}
@@ -321,7 +330,7 @@ const CampaignLibrary = ({ campaigns, setCampaigns, components = [], user, onLog
                           <button
                             type="button"
                             onClick={() => setEditingId(null)}
-                            className="icon text-blue-300"
+                            className="icon text-[var(--primary-color)]"
                             title="Abbrechen"
                           >
                             <X size={16} />
@@ -332,8 +341,10 @@ const CampaignLibrary = ({ campaigns, setCampaigns, components = [], user, onLog
                   ) : (
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <div className="font-mono font-medium text-sm text-white">{campaign.name}</div>
-                        <div className="text-xs text-gray-400">
+                        <div className="font-mono font-semibold text-sm text-[var(--text-color)]">
+                          {campaign.name}
+                        </div>
+                        <div className="text-xs text-[var(--text-muted)] mt-0.5">
                           Inhaber: {campaign.inhaber || user.name}
                         </div>
                       </div>
@@ -342,7 +353,7 @@ const CampaignLibrary = ({ campaigns, setCampaigns, components = [], user, onLog
                         <button
                           type="button"
                           onClick={() => copyCampaignName(campaign.id, campaign.name)}
-                          className={`icon ${copySuccess[campaign.id] ? 'text-[var(--success-color)]' : 'text-blue-300'}`}
+                          className={`icon ${copySuccess[campaign.id] ? 'text-[var(--success-color)]' : 'text-[var(--primary-color)]'}`}
                           title="Kopieren"
                         >
                           {copySuccess[campaign.id] ? <Check size={14} /> : <Copy size={14} />}
@@ -352,7 +363,7 @@ const CampaignLibrary = ({ campaigns, setCampaigns, components = [], user, onLog
                             <button
                               type="button"
                               onClick={() => startEdit(campaign)}
-                              className="icon text-blue-300"
+                              className="icon text-[var(--primary-color)]"
                               title="Bearbeiten"
                             >
                               <Edit3 size={14} />
@@ -360,7 +371,7 @@ const CampaignLibrary = ({ campaigns, setCampaigns, components = [], user, onLog
                             <button
                               type="button"
                               onClick={() => toggleArchive(campaign)}
-                              className={`icon ${campaign.archived ? 'text-blue-400' : 'text-orange-400'}`}
+                              className="icon text-[var(--warning-color)]"
                               title={campaign.archived ? 'Dearchivieren' : 'Archivieren'}
                             >
                               <Archive size={14} />
@@ -383,13 +394,23 @@ const CampaignLibrary = ({ campaigns, setCampaigns, components = [], user, onLog
             })}
 
             {filteredCampaigns.length === 0 && (
-              <p className="text-center text-gray-400 py-8 mb-0">
+              <p className="text-center text-[var(--text-muted)] py-8 mb-0">
                 {showArchived ? 'Keine archivierten Kampagnen gefunden' : 'Keine aktiven Kampagnen gefunden'}
               </p>
             )}
           </div>
         </div>
       </div>
+
+      <QuickAddTopicModal
+        isOpen={topicModalOpen}
+        onClose={() => setTopicModalOpen(false)}
+        user={user}
+        onCreated={(newTopicComp) => {
+          if (onComponentCreated) onComponentCreated(newTopicComp);
+          setNewTopic(newTopicComp.slug);
+        }}
+      />
     </div>
   );
 };

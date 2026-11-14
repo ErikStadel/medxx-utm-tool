@@ -6,7 +6,10 @@ import CampaignLibrary from './components/CampaignLibrary';
 import SavedLinks from './components/SavedLinks';
 import TaxonomyManager from './components/TaxonomyManager';
 import Admin from './components/Admin';
+import { applyTheme, getInitialTheme } from './utils/theme';
 import './App.css';
+
+applyTheme(getInitialTheme());
 
 const App = () => {
   const [user, setUser] = useState(null);
@@ -116,6 +119,7 @@ const App = () => {
               sources={sources}
               components={components}
               onSourceCreated={(newSource) => setSources((prev) => [...prev, newSource])}
+              onComponentCreated={(newComp) => setComponents((prev) => [...prev, newComp])}
               onLinkSaved={(newLink) => setSavedLinks((prev) => [newLink, ...prev])}
               user={user}
               onLogout={handleLogout}
@@ -141,6 +145,7 @@ const App = () => {
               campaigns={campaigns}
               setCampaigns={setCampaigns}
               components={components}
+              onComponentCreated={(newComp) => setComponents((prev) => [...prev, newComp])}
               user={user}
               onLogout={handleLogout}
             />
