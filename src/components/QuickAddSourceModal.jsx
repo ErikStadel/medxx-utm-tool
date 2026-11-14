@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Plus, AlertCircle, CheckCircle2 } from 'lucide-react';
 import {
-  ALLOWED_MEDIUMS,
   SOURCE_CATEGORY_LABELS,
   buildSourceSlug,
+  isDynamicPlatformToken,
   normalizeSlug,
   validateUtmSource,
 } from '../utils/utmValidation';
@@ -12,6 +12,7 @@ const QuickAddSourceModal = ({
   isOpen,
   onClose,
   user,
+  mediumOptions = [],
   initialCategory = 'partner',
   onCreated,
 }) => {
@@ -122,7 +123,7 @@ const QuickAddSourceModal = ({
                 const nextCat = e.target.value;
                 setCategory(nextCat);
                 setSlugManuallyEdited(false);
-                if (nextCat === 'partner') setDefaultMedium('offline');
+                if (nextCat === 'partner' || nextCat === 'location') setDefaultMedium('offline');
                 else if (nextCat === 'event') setDefaultMedium('event');
                 else if (nextCat === 'publisher') setDefaultMedium('advertorial');
               }}
@@ -152,7 +153,7 @@ const QuickAddSourceModal = ({
                   ? 'z. B. Praxis-IT Müller'
                   : category === 'event'
                     ? 'z. B. Stuttgart'
-                    : 'z. B. Hausarzt Digital'
+                    : 'z. B. Meta Ads dynamisch oder TikTok'
               }
               autoFocus
             />
@@ -180,10 +181,11 @@ const QuickAddSourceModal = ({
               value={customSlug}
               onChange={(e) => {
                 setSlugManuallyEdited(true);
-                setCustomSlug(normalizeSlug(e.target.value));
+                const val = e.target.value;
+                setCustomSlug(isAdmin && isDynamicPlatformToken(val.trim()) ? val.trim() : normalizeSlug(val));
               }}
               className="font-mono text-sm"
-              placeholder="z. B. partner-mueller"
+              placeholder="z. B. al-data oder {{site_source_name}}"
             />
             {customSlug && !slugError ? (
               <p className="text-xs text-[var(--success-color)] mt-1 mb-0 flex items-center gap-1">
@@ -206,9 +208,9 @@ const QuickAddSourceModal = ({
                 onChange={(e) => setDefaultMedium(e.target.value)}
               >
                 <option value="">-- Kein Standard --</option>
-                {ALLOWED_MEDIUMS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
+                {mediumOptions.map((m) => (
+                  <option key={m.slug} value={m.slug}>
+                    {m.slug}
                   </option>
                 ))}
               </select>
@@ -219,7 +221,7 @@ const QuickAddSourceModal = ({
                 type="text"
                 value={shortlinkPath}
                 onChange={(e) => setShortlinkPath(e.target.value)}
-                placeholder="medatixx.de/partner-..."
+                placeholder="medatixx.de/..."
               />
             </div>
           </div>

@@ -8,7 +8,6 @@ import {
   Plus,
   BookmarkPlus,
   RotateCcw,
-  Sparkles,
   ExternalLink,
 } from 'lucide-react';
 import LayoutHeader from './LayoutHeader';
@@ -16,10 +15,6 @@ import CampaignModuleSelector from './CampaignModuleSelector';
 import ContentModuleSelector from './ContentModuleSelector';
 import QuickAddSourceModal from './QuickAddSourceModal';
 import {
-  ALLOWED_FUNNELS,
-  ALLOWED_MEDIUMS,
-  PUBLISHER_ALLOWED_MEDIUMS,
-  SCENARIO_PRESETS,
   SOURCE_CATEGORY_LABELS,
   getLookerStudioPreview,
   normalizeSlug,
@@ -36,6 +31,14 @@ const SOURCE_MODES = [
   { id: 'event', label: 'Messe / Event' },
 ];
 
+const isSourceAllowedForMedium = (src, chosenMedium) => {
+  if (!chosenMedium) return false;
+  if (Array.isArray(src.allowed_mediums) && src.allowed_mediums.length > 0) {
+    return src.allowed_mediums.includes(chosenMedium);
+  }
+  return true;
+};
+
 const UTMBuilder = ({
   campaigns,
   sources = [],
@@ -46,13 +49,13 @@ const UTMBuilder = ({
   onLogout,
 }) => {
   const [baseUrl, setBaseUrl] = useState('https://medatixx.de');
+  const [medium, setMedium] = useState('');
   const [sourceMode, setSourceMode] = useState('standard');
   const [source, setSource] = useState('');
   const [isNewPublisher, setIsNewPublisher] = useState(false);
   const [newPublisherSlug, setNewPublisherSlug] = useState('');
   const [newPublisherLabel, setNewPublisherLabel] = useState('');
   const [sourceSearch, setSourceSearch] = useState('');
-  const [medium, setMedium] = useState('');
   const [topic, setTopic] = useState('');
   const [audience, setAudience] = useState('');
   const [funnel, setFunnel] = useState('');
@@ -99,30 +102,50 @@ const UTMBuilder = ({
     [sources]
   );
 
+  // Erlaubte Mediums für neue Publisher direkt aus den DB-Publishern ableiten
+  const publisherAllowedMediums = useMemo(() => {
+    const pubSources = activeSources.filter((s) => s.category === 'publisher');
+    const set = new Set();
+    pubSources.forEach((s) => {
+      if (Array.isArray(s.allowed_mediums)) {
+        s.allowed_mediums.forEach((m) => set.add(m));
+      }
+    });
+    if (set.size > 0) return Array.from(set);
+    return activeComponents.medium.map((m) => m.slug);
+  }, [activeSources, activeComponents.medium]);
+
+  const canCreatePublisherForMedium = Boolean(medium && publisherAllowedMediums.includes(medium));
+
+  const matchingSources = useMemo(
+    () => (medium ? activeSources.filter((s) => isSourceAllowedForMedium(s, medium)) : []),
+    [activeSources, medium]
+  );
+
   const sourceCounts = useMemo(
     () => ({
-      standard: activeSources.filter((s) => STANDARD_CATEGORIES.includes(s.category)).length,
-      publisher: activeSources.filter((s) => s.category === 'publisher').length,
-      partner: activeSources.filter((s) => s.category === 'partner').length,
-      location: activeSources.filter((s) => s.category === 'location').length,
-      event: activeSources.filter((s) => s.category === 'event').length,
+      standard: matchingSources.filter((s) => STANDARD_CATEGORIES.includes(s.category)).length,
+      publisher: matchingSources.filter((s) => s.category === 'publisher').length,
+      partner: matchingSources.filter((s) => s.category === 'partner').length,
+      location: matchingSources.filter((s) => s.category === 'location').length,
+      event: matchingSources.filter((s) => s.category === 'event').length,
     }),
-    [activeSources]
+    [matchingSources]
   );
 
   const standardSources = useMemo(() => {
-    const list = activeSources.filter((s) => STANDARD_CATEGORIES.includes(s.category));
+    const list = matchingSources.filter((s) => STANDARD_CATEGORIES.includes(s.category));
     const byCategory = { digital: [], offline: [] };
     list.forEach((s) => {
       if (byCategory[s.category]) byCategory[s.category].push(s);
     });
     return byCategory;
-  }, [activeSources]);
+  }, [matchingSources]);
 
   const subListSources = useMemo(() => {
     if (sourceMode === 'standard') return [];
     const q = sourceSearch.trim().toLowerCase();
-    return activeSources
+    return matchingSources
       .filter((s) => s.category === sourceMode)
       .filter(
         (s) =>
@@ -131,30 +154,9 @@ const UTMBuilder = ({
           s.slug.toLowerCase().includes(q)
       )
       .sort((a, b) => a.label.localeCompare(b.label, 'de'));
-  }, [activeSources, sourceMode, sourceSearch]);
+  }, [matchingSources, sourceMode, sourceSearch]);
 
   const effectiveSource = isNewPublisher ? newPublisherSlug.trim() : source;
-
-  const selectedSourceObj = useMemo(
-    () => (isNewPublisher ? null : activeSources.find((s) => s.slug === source) || null),
-    [activeSources, source, isNewPublisher]
-  );
-
-  const allowedMediumOptions = useMemo(() => {
-    if (isNewPublisher) {
-      return activeComponents.medium.filter((m) => PUBLISHER_ALLOWED_MEDIUMS.includes(m.slug));
-    }
-    if (!selectedSourceObj) {
-      return [];
-    }
-    const allowed = Array.isArray(selectedSourceObj.allowed_mediums)
-      ? selectedSourceObj.allowed_mediums
-      : [];
-    if (allowed.length > 0) {
-      return activeComponents.medium.filter((m) => allowed.includes(m.slug));
-    }
-    return activeComponents.medium;
-  }, [isNewPublisher, selectedSourceObj, activeComponents.medium]);
 
   const duplicatePublisherError = useMemo(() => {
     if (!isNewPublisher || !newPublisherSlug.trim()) return null;
@@ -180,16 +182,8 @@ const UTMBuilder = ({
   }, [termMode, termInput]);
 
   const validation = useMemo(() => {
-    const allowedMediums =
-      allowedMediumOptions.length > 0
-        ? allowedMediumOptions.map((m) => m.slug)
-        : activeComponents.medium.length > 0
-          ? activeComponents.medium.map((m) => m.slug)
-          : ALLOWED_MEDIUMS;
-    const allowedFunnels =
-      activeComponents.funnel.length > 0
-        ? activeComponents.funnel.map((f) => f.slug)
-        : ALLOWED_FUNNELS;
+    const allowedMediums = activeComponents.medium.map((m) => m.slug);
+    const allowedFunnels = activeComponents.funnel.map((f) => f.slug);
 
     const result = validateFullUtmState(
       {
@@ -208,6 +202,7 @@ const UTMBuilder = ({
         sources: activeSources,
         allowedMediums,
         allowedFunnels,
+        isNewPublisher,
       }
     );
 
@@ -230,7 +225,7 @@ const UTMBuilder = ({
     customParams,
     activeSources,
     activeComponents,
-    allowedMediumOptions,
+    isNewPublisher,
     duplicatePublisherError,
   ]);
 
@@ -281,18 +276,57 @@ const UTMBuilder = ({
     [effectiveSource, medium, topic, audience, funnel, angle, format, resolvedTerm]
   );
 
-  const syncMediumForSourceObj = (sourceObj, currentMedium) => {
-    if (!sourceObj) return '';
-    const allowed = Array.isArray(sourceObj.allowed_mediums) ? sourceObj.allowed_mediums : [];
-    if (allowed.length === 1) return allowed[0];
-    if (allowed.length > 0) {
-      if (currentMedium && allowed.includes(currentMedium)) return currentMedium;
-      if (sourceObj.default_medium && allowed.includes(sourceObj.default_medium)) {
-        return sourceObj.default_medium;
-      }
-      return allowed[0];
+  const handleMediumChange = (nextMedium) => {
+    setMedium(nextMedium);
+    setSourceSearch('');
+    setSaveSuccess(false);
+    setSavedPublisherSlug('');
+
+    if (!nextMedium) {
+      setSource('');
+      setIsNewPublisher(false);
+      setNewPublisherSlug('');
+      setNewPublisherLabel('');
+      return;
     }
-    return sourceObj.default_medium || currentMedium || '';
+
+    const nextMatching = activeSources.filter((s) => isSourceAllowedForMedium(s, nextMedium));
+    const currentStillAllowed =
+      !isNewPublisher && source && nextMatching.some((s) => s.slug === source);
+
+    if (!currentStillAllowed) {
+      setSource('');
+    }
+
+    const nextPubAllowed = publisherAllowedMediums.includes(nextMedium);
+    if (isNewPublisher && !nextPubAllowed) {
+      setIsNewPublisher(false);
+      setNewPublisherSlug('');
+      setNewPublisherLabel('');
+    }
+
+    // Automatisch in einen passenden Source-Modus wechseln, falls der aktuelle Modus leer ist
+    const counts = {
+      standard: nextMatching.filter((s) => STANDARD_CATEGORIES.includes(s.category)).length,
+      publisher: nextMatching.filter((s) => s.category === 'publisher').length,
+      partner: nextMatching.filter((s) => s.category === 'partner').length,
+      location: nextMatching.filter((s) => s.category === 'location').length,
+      event: nextMatching.filter((s) => s.category === 'event').length,
+    };
+
+    const currentModeHasOptions =
+      sourceMode === 'publisher'
+        ? counts.publisher > 0 || nextPubAllowed
+        : counts[sourceMode] > 0;
+
+    if (!currentModeHasOptions) {
+      const firstAvailable = ['standard', 'publisher', 'partner', 'location', 'event'].find(
+        (m) => (m === 'publisher' ? counts.publisher > 0 || nextPubAllowed : counts[m] > 0)
+      );
+      if (firstAvailable) {
+        setSourceMode(firstAvailable);
+      }
+    }
   };
 
   const switchSourceMode = (nextMode) => {
@@ -310,54 +344,19 @@ const UTMBuilder = ({
 
     if (!keepCurrent) {
       setSource('');
-      setMedium('');
     }
     setSaveSuccess(false);
     setSavedPublisherSlug('');
-  };
-
-  const handleApplyPreset = (preset) => {
-    setIsNewPublisher(false);
-    setNewPublisherSlug('');
-    setNewPublisherLabel('');
-    if (preset.sourceMode) {
-      setSourceMode(preset.sourceMode);
-      setSourceSearch('');
-    }
-    if (preset.source) {
-      setSource(preset.source);
-      const found = activeSources.find((s) => s.slug === preset.source);
-      if (preset.medium) {
-        setMedium(preset.medium);
-      } else if (found) {
-        setMedium(syncMediumForSourceObj(found, ''));
-      }
-    } else {
-      setSource('');
-      setMedium('');
-    }
-    if (preset.topic) setTopic(preset.topic);
-    if (preset.audience) setAudience(preset.audience);
-    if (preset.funnel) setFunnel(preset.funnel);
-    if (preset.angle) setAngle(preset.angle);
-    if (preset.format) setFormat(preset.format);
-    if (preset.termMode) {
-      setTermMode(preset.termMode);
-      setTermInput('');
-    }
-    setSaveSuccess(false);
-    setSavedPublisherSlug('');
-    setSaveError('');
   };
 
   const handleReset = () => {
+    setMedium('');
     setSourceMode('standard');
     setSource('');
     setIsNewPublisher(false);
     setNewPublisherSlug('');
     setNewPublisherLabel('');
     setSourceSearch('');
-    setMedium('');
     setTopic('');
     setAudience('');
     setFunnel('');
@@ -385,7 +384,6 @@ const UTMBuilder = ({
       setSource('');
       setNewPublisherSlug('');
       setNewPublisherLabel('');
-      setMedium((prev) => (PUBLISHER_ALLOWED_MEDIUMS.includes(prev) ? prev : 'advertorial'));
       setSaveSuccess(false);
       setSavedPublisherSlug('');
       return;
@@ -397,7 +395,6 @@ const UTMBuilder = ({
     setSource(nextValue);
 
     const found = activeSources.find((s) => s.slug === nextValue);
-    setMedium((prev) => syncMediumForSourceObj(found, prev));
     if (found?.shortlink_path && !shortlinkUrl) {
       setShortlinkUrl(found.shortlink_path);
     }
@@ -501,33 +498,12 @@ const UTMBuilder = ({
             <div>
               <h2 className="mb-1">Modularer UTM-Parameter Generator</h2>
               <p className="text-sm text-gray-300 mb-0">
-                Alle Bausteine werden per Dropdown nach GA4- & Looker-Studio-Standard zusammengestellt und live geprüft.
+                Alle Bausteine stammen aus Neon und werden per Dropdown nach GA4- & Looker-Studio-Standard zusammengestellt und geprüft.
               </p>
             </div>
             <button type="button" onClick={handleReset} className="secondary flex items-center gap-1.5 text-sm">
               <RotateCcw size={15} /> Zurücksetzen
             </button>
-          </div>
-
-          {/* Schnellvorlagen / Szenarien */}
-          <div className="p-4 rounded-lg bg-gray-800/40 border border-[var(--border-color)]">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-300 mb-2">
-              <Sparkles size={14} className="text-[var(--primary-color)]" />
-              Szenario-Vorlagen (optional)
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {SCENARIO_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => handleApplyPreset(preset)}
-                  title={preset.description}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-[var(--border-color)] text-[var(--text-color)]"
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* Base URL */}
@@ -551,7 +527,7 @@ const UTMBuilder = ({
             )}
           </div>
 
-          {/* 1. Fundament: ZUERST utm_source, DANACH erlaubtes utm_medium */}
+          {/* 1. Fundament: ZUERST utm_medium, DANACH erlaubte utm_source */}
           <div className="p-4 rounded-lg bg-gray-800/60 border border-[var(--border-color)] space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-base font-semibold">
@@ -582,7 +558,7 @@ const UTMBuilder = ({
                   <button
                     type="button"
                     onClick={() => {
-                      setSourceModalCategory('publisher');
+                      setSourceModalCategory('digital');
                       setSourceModalOpen(true);
                     }}
                     className="secondary text-xs flex items-center gap-1 py-1.5 px-2.5"
@@ -594,28 +570,62 @@ const UTMBuilder = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-              {/* Schritt 1: UTM Source */}
+              {/* Schritt 1: UTM Medium */}
+              <div>
+                <label>1. UTM Medium (GA4-Kanal) *</label>
+                <select
+                  aria-label="UTM Medium"
+                  value={medium}
+                  onChange={(e) => handleMediumChange(e.target.value)}
+                  className={validation.errors.medium ? 'error' : ''}
+                >
+                  <option value="">-- Medium wählen --</option>
+                  {activeComponents.medium.map((m) => (
+                    <option key={m.slug} value={m.slug}>
+                      {m.slug} {m.description ? `— ${m.description}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {validation.errors.medium && (
+                  <div className="validation-message error-message">
+                    <AlertCircle size={15} className="mr-2 shrink-0" />
+                    {validation.errors.medium}
+                  </div>
+                )}
+              </div>
+
+              {/* Schritt 2: UTM Source (gefiltert nach erlaubten Sources für das gewählte Medium) */}
               <div className="space-y-2">
-                <label className="mb-1">1. UTM Source (Typ & Absender) *</label>
+                <label className="mb-1">2. UTM Source (Passende Absender) *</label>
 
                 <div className="flex flex-wrap gap-1.5">
-                  {SOURCE_MODES.map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => switchSourceMode(m.id)}
-                      className={`text-xs px-2.5 py-1 rounded-md border transition-colors ${
-                        sourceMode === m.id
-                          ? 'bg-[var(--primary-color)] border-[var(--primary-color)] text-white'
-                          : 'bg-gray-900/60 border-[var(--border-color)] text-gray-300 hover:bg-gray-700'
-                      }`}
-                    >
-                      {m.label} ({sourceCounts[m.id] || 0})
-                    </button>
-                  ))}
+                  {SOURCE_MODES.map((m) => {
+                    const count = sourceCounts[m.id] || 0;
+                    const modeAvailable =
+                      medium && (m.id === 'publisher' ? count > 0 || canCreatePublisherForMedium : count > 0);
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        disabled={!medium || !modeAvailable}
+                        onClick={() => switchSourceMode(m.id)}
+                        className={`text-xs px-2.5 py-1 rounded-md border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                          sourceMode === m.id && medium
+                            ? 'bg-[var(--primary-color)] border-[var(--primary-color)] text-white'
+                            : 'bg-gray-900/60 border-[var(--border-color)] text-gray-300 hover:bg-gray-700'
+                        }`}
+                      >
+                        {m.label} ({count})
+                      </button>
+                    );
+                  })}
                 </div>
 
-                {sourceMode === 'standard' ? (
+                {!medium ? (
+                  <select aria-label="UTM Source" disabled value="">
+                    <option value="">-- Zuerst UTM Medium wählen --</option>
+                  </select>
+                ) : sourceMode === 'standard' ? (
                   <select
                     aria-label="UTM Source"
                     value={source}
@@ -634,20 +644,34 @@ const UTMBuilder = ({
                         </optgroup>
                       ) : null
                     )}
-                    <optgroup label="Große Listen gezielt öffnen">
-                      <option value="__mode:publisher">
-                        Fachportal / Publisher auswählen ({sourceCounts.publisher})...
-                      </option>
-                      <option value="__mode:partner">
-                        Partner auswählen ({sourceCounts.partner} Service-Partner)...
-                      </option>
-                      <option value="__mode:location">
-                        Standort / Niederlassung auswählen ({sourceCounts.location})...
-                      </option>
-                      <option value="__mode:event">
-                        Messe / Event auswählen ({sourceCounts.event})...
-                      </option>
-                    </optgroup>
+                    {(sourceCounts.publisher > 0 ||
+                      canCreatePublisherForMedium ||
+                      sourceCounts.partner > 0 ||
+                      sourceCounts.location > 0 ||
+                      sourceCounts.event > 0) && (
+                      <optgroup label="Weitere Listen öffnen">
+                        {(sourceCounts.publisher > 0 || canCreatePublisherForMedium) && (
+                          <option value="__mode:publisher">
+                            Fachportal / Publisher auswählen ({sourceCounts.publisher})...
+                          </option>
+                        )}
+                        {sourceCounts.partner > 0 && (
+                          <option value="__mode:partner">
+                            Partner auswählen ({sourceCounts.partner} Service-Partner)...
+                          </option>
+                        )}
+                        {sourceCounts.location > 0 && (
+                          <option value="__mode:location">
+                            Standort / Niederlassung auswählen ({sourceCounts.location})...
+                          </option>
+                        )}
+                        {sourceCounts.event > 0 && (
+                          <option value="__mode:event">
+                            Messe / Event auswählen ({sourceCounts.event})...
+                          </option>
+                        )}
+                      </optgroup>
+                    )}
                   </select>
                 ) : (
                   <div className="p-3 rounded-lg bg-gray-900/60 border border-[var(--border-color)] space-y-2">
@@ -679,7 +703,7 @@ const UTMBuilder = ({
                       <option value="">
                         -- {SOURCE_CATEGORY_LABELS[sourceMode]} wählen --
                       </option>
-                      {sourceMode === 'publisher' && (
+                      {sourceMode === 'publisher' && canCreatePublisherForMedium && (
                         <option value="__new_publisher">+ Neuer Publisher (Freitext)</option>
                       )}
                       {subListSources.map((s) => (
@@ -753,44 +777,6 @@ const UTMBuilder = ({
                           Übernehmen: {normalizedSuggestion}
                         </button>
                       )}
-                  </div>
-                )}
-              </div>
-
-              {/* Schritt 2: UTM Medium (gefiltert nach erlaubten Parametern der Source) */}
-              <div>
-                <label>2. UTM Medium (Erlaubte GA4-Kanäle) *</label>
-                <select
-                  aria-label="UTM Medium"
-                  value={medium}
-                  disabled={!effectiveSource && !isNewPublisher}
-                  onChange={(e) => {
-                    setMedium(e.target.value);
-                    setSaveSuccess(false);
-                  }}
-                  className={validation.errors.medium ? 'error' : ''}
-                >
-                  <option value="">
-                    {!effectiveSource && !isNewPublisher
-                      ? '-- Zuerst UTM Source wählen --'
-                      : '-- Medium wählen --'}
-                  </option>
-                  {allowedMediumOptions.map((m) => (
-                    <option key={m.slug} value={m.slug}>
-                      {m.slug} {m.description ? `— ${m.description}` : ''}
-                    </option>
-                  ))}
-                </select>
-                {effectiveSource && allowedMediumOptions.length > 0 && (
-                  <p className="text-xs text-gray-400 mt-1 mb-0">
-                    Erlaubt für <code className="text-gray-200">{effectiveSource}</code>:{' '}
-                    {allowedMediumOptions.map((m) => m.slug).join(', ')}
-                  </p>
-                )}
-                {validation.errors.medium && (
-                  <div className="validation-message error-message">
-                    <AlertCircle size={15} className="mr-2 shrink-0" />
-                    {validation.errors.medium}
                   </div>
                 )}
               </div>
@@ -1070,7 +1056,7 @@ const UTMBuilder = ({
             </div>
           ) : (
             <div className="p-4 rounded-lg bg-gray-800/40 border border-dashed border-[var(--border-color)] text-sm text-gray-400">
-              Bitte Base URL, UTM Source, erlaubtes UTM Medium sowie alle 3 Bausteine von UTM Campaign (Thema, Zielgruppe, Funnel) gültig auswählen, um die URL zu generieren und zu speichern.
+              Bitte Base URL, UTM Medium, erlaubte UTM Source sowie alle 3 Bausteine von UTM Campaign (Thema, Zielgruppe, Funnel) gültig auswählen, um die URL zu generieren und zu speichern.
             </div>
           )}
         </div>
@@ -1080,19 +1066,24 @@ const UTMBuilder = ({
         isOpen={sourceModalOpen}
         onClose={() => setSourceModalOpen(false)}
         user={user}
+        mediumOptions={activeComponents.medium}
         initialCategory={sourceModalCategory}
         onCreated={(newSource) => {
           if (onSourceCreated) onSourceCreated(newSource);
           setIsNewPublisher(false);
           setNewPublisherSlug('');
           setNewPublisherLabel('');
+          if (newSource.default_medium) {
+            setMedium(newSource.default_medium);
+          } else if (Array.isArray(newSource.allowed_mediums) && newSource.allowed_mediums.length > 0) {
+            setMedium(newSource.allowed_mediums[0]);
+          }
           if (['publisher', 'partner', 'location', 'event'].includes(newSource.category)) {
             setSourceMode(newSource.category);
           } else {
             setSourceMode('standard');
           }
           setSource(newSource.slug);
-          setMedium((prev) => syncMediumForSourceObj(newSource, prev));
           if (newSource.shortlink_path) {
             setShortlinkUrl(newSource.shortlink_path);
           }

@@ -2,11 +2,12 @@ import React, { useMemo, useState } from 'react';
 import { Plus, Trash2, AlertCircle, CheckCircle2, Lock, Power, Search } from 'lucide-react';
 import LayoutHeader from './LayoutHeader';
 import {
-  ALLOWED_MEDIUMS,
   SOURCE_CATEGORY_LABELS,
   buildSourceSlug,
+  isDynamicPlatformToken,
   normalizeSlug,
   validateSlugModule,
+  validateUtmSource,
 } from '../utils/utmValidation';
 
 const COMPONENT_TABS = [
@@ -76,9 +77,17 @@ const TaxonomyManager = ({
     }
   };
 
+  const mediumOptions = useMemo(
+    () => components.filter((c) => c.component_type === 'medium' && c.is_active !== false),
+    [components]
+  );
+
   const handleCreateSource = async (e) => {
     e.preventDefault();
-    const slugErr = validateSlugModule(sourceSlug, 'Source-Slug');
+    const slugErr =
+      isAdmin && isDynamicPlatformToken(sourceSlug)
+        ? validateUtmSource(sourceSlug)
+        : validateSlugModule(sourceSlug, 'Source-Slug');
     if (slugErr) {
       setError(slugErr);
       return;
@@ -363,7 +372,10 @@ const TaxonomyManager = ({
                       value={sourceSlug}
                       onChange={(e) => {
                         setSlugEdited(true);
-                        setSourceSlug(normalizeSlug(e.target.value));
+                        const val = e.target.value;
+                        setSourceSlug(
+                          isAdmin && isDynamicPlatformToken(val.trim()) ? val.trim() : normalizeSlug(val)
+                        );
                       }}
                       className="font-mono text-sm"
                       placeholder="z. B. partner-mueller"
@@ -376,9 +388,9 @@ const TaxonomyManager = ({
                     <label>Standard-Medium</label>
                     <select value={defaultMedium} onChange={(e) => setDefaultMedium(e.target.value)}>
                       <option value="">-- Kein Standard --</option>
-                      {ALLOWED_MEDIUMS.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
+                      {mediumOptions.map((m) => (
+                        <option key={m.slug} value={m.slug}>
+                          {m.slug}
                         </option>
                       ))}
                     </select>

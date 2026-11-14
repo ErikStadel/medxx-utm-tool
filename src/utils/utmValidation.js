@@ -1,18 +1,3 @@
-export const ALLOWED_MEDIUMS = [
-  'cpc',
-  'paid_social',
-  'organic_social',
-  'email',
-  'display',
-  'advertorial',
-  'offline',
-  'event',
-  'referral',
-];
-
-export const ALLOWED_FUNNELS = ['tofu', 'mofu', 'bofu', 'retargeting'];
-export const PUBLISHER_ALLOWED_MEDIUMS = ['advertorial', 'display', 'email', 'referral'];
-
 export const SOURCE_CATEGORY_LABELS = {
   digital: 'Digital (Paid & Organic)',
   publisher: 'Fachportale / Publisher',
@@ -22,78 +7,8 @@ export const SOURCE_CATEGORY_LABELS = {
   event: 'Messen & Events',
 };
 
-export const SCENARIO_PRESETS = [
-  {
-    id: 'paid_social',
-    label: 'Paid Social (LinkedIn / Meta)',
-    description: 'z. B. LinkedIn oder Meta Ads mit Angle & Format',
-    medium: 'paid_social',
-    sourceMode: 'standard',
-    preferredCategories: ['digital'],
-    termMode: 'jobtitel',
-  },
-  {
-    id: 'google_ads',
-    label: 'Google Ads (Search / SEA)',
-    description: 'Generische oder Brand-Suche mit {keyword}',
-    medium: 'cpc',
-    sourceMode: 'standard',
-    source: 'google',
-    termMode: 'keyword',
-  },
-  {
-    id: 'advertorial',
-    label: 'Fachportal Advertorial',
-    description: 'Bezahlte Fachartikel (Ärzteblatt, coliquio, Medical Tribune)',
-    medium: 'advertorial',
-    sourceMode: 'publisher',
-    preferredCategories: ['publisher'],
-    angle: 'edu',
-    format: 'text',
-  },
-  {
-    id: 'partner_rollup',
-    label: 'Service-Partner Rollup (Offline)',
-    description: 'Physisches Rollup / QR-Code beim Service-Partner',
-    medium: 'offline',
-    sourceMode: 'partner',
-    format: 'rollup',
-  },
-  {
-    id: 'location_offline',
-    label: 'Niederlassung / Standort',
-    description: 'Regionale Aktion über medatixx-Niederlassung oder Zentrale',
-    medium: 'offline',
-    sourceMode: 'location',
-  },
-  {
-    id: 'print_mailing',
-    label: 'Print-Mailing / Flyer (Offline)',
-    description: 'Dialogpost, Postkarte oder Flyer mit QR-Code',
-    medium: 'offline',
-    sourceMode: 'standard',
-    source: 'print',
-    angle: 'promo',
-    format: 'qr-code',
-  },
-  {
-    id: 'messe_tablet',
-    label: 'Messe-Tablet (Lead-Erfassung)',
-    description: 'Festes Webformular auf dem Stand-Tablet vor Ort',
-    medium: 'event',
-    sourceMode: 'event',
-    preferredCategories: ['event'],
-    topic: 'stand-tablet',
-    audience: 'aerzte-allg',
-    funnel: 'bofu',
-    angle: 'lead-erfassung',
-    format: 'tablet',
-  },
-];
-
-export const DYNAMIC_SOURCE_TOKENS = ['{{site_source_name}}'];
-
 const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const DYNAMIC_PLATFORM_TOKEN_REGEX = /^\{\{[a-z0-9_]+\}\}$/;
 
 /**
  * Normalisiert beliebige Eingaben in ein Looker-Studio-sicheres Kleinschreibungs-Slug-Format.
@@ -117,7 +32,7 @@ export function normalizeSlug(value) {
 /**
  * Erzeugt einen standardisierten Source-Slug für Partner oder Messen.
  */
-export function buildSourceSlug(rawName, category, usePrefix = true) {
+export function buildSourceSlug(rawName, category, usePrefix = false) {
   const normalized = normalizeSlug(rawName);
   if (!normalized) return '';
   if (!usePrefix) return normalized;
@@ -141,6 +56,10 @@ export function buildSourceSlug(rawName, category, usePrefix = true) {
 
 export function isValidSlug(value) {
   return typeof value === 'string' && SLUG_REGEX.test(value);
+}
+
+export function isDynamicPlatformToken(value) {
+  return typeof value === 'string' && DYNAMIC_PLATFORM_TOKEN_REGEX.test(value.trim());
 }
 
 /**
@@ -169,24 +88,38 @@ export function validateSlugModule(value, fieldLabel) {
   return null;
 }
 
-export function validateUtmSource(value) {
-  if (value && DYNAMIC_SOURCE_TOKENS.includes(value.trim())) {
-    return null;
+export function validateUtmSource(value, activeSources = null, isNewPublisher = false) {
+  if (!value || !value.trim()) {
+    return 'utm_source ist erforderlich';
   }
-  return validateSlugModule(value, 'utm_source');
+  const trimmed = value.trim();
+
+  if (!isDynamicPlatformToken(trimmed)) {
+    const slugErr = validateSlugModule(trimmed, 'utm_source');
+    if (slugErr) return slugErr;
+  }
+
+  if (!isNewPublisher && Array.isArray(activeSources) && activeSources.length > 0) {
+    const exists = activeSources.some((s) => s.slug === trimmed);
+    if (!exists) {
+      return `utm_source "${trimmed}" ist nicht in der Datenbank hinterlegt`;
+    }
+  }
+
+  return null;
 }
 
-export function validateUtmMedium(value, allowedMediums = ALLOWED_MEDIUMS) {
+export function validateUtmMedium(value, allowedMediums = null) {
   if (!value || !value.trim()) {
     return 'utm_medium ist erforderlich';
   }
-  if (!allowedMediums.includes(value)) {
-    return `utm_medium "${value}" entspricht keinem gültigen GA4-Standard`;
+  if (Array.isArray(allowedMediums) && allowedMediums.length > 0 && !allowedMediums.includes(value)) {
+    return `utm_medium "${value}" ist für diese Konfiguration nicht erlaubt`;
   }
   return null;
 }
 
-export function validateUtmCampaignParts({ topic, audience, funnel }, allowedFunnels = ALLOWED_FUNNELS) {
+export function validateUtmCampaignParts({ topic, audience, funnel }, allowedFunnels = null) {
   const topicErr = validateSlugModule(topic, 'Thema');
   if (topicErr) return topicErr;
 
@@ -196,13 +129,16 @@ export function validateUtmCampaignParts({ topic, audience, funnel }, allowedFun
   if (!funnel || !funnel.trim()) {
     return 'Funnel ist erforderlich';
   }
-  if (!allowedFunnels.includes(funnel)) {
-    return `Funnel muss einer der Werte sein: ${allowedFunnels.join(', ')}`;
+  const funnelErr = validateSlugModule(funnel, 'Funnel');
+  if (funnelErr) return funnelErr;
+
+  if (Array.isArray(allowedFunnels) && allowedFunnels.length > 0 && !allowedFunnels.includes(funnel)) {
+    return `Funnel muss einer der Werte aus der Datenbank sein: ${allowedFunnels.join(', ')}`;
   }
   return null;
 }
 
-export function validateUtmCampaignString(value, allowedFunnels = ALLOWED_FUNNELS) {
+export function validateUtmCampaignString(value, allowedFunnels = null) {
   if (!value || !value.trim()) {
     return 'utm_campaign ist erforderlich';
   }
@@ -252,13 +188,13 @@ export function validateUtmContentString(value) {
 export function validateUtmTerm(value) {
   if (!value || !value.trim()) return null;
   const trimmed = value.trim();
-  if (trimmed === '{keyword}') return null;
+  if (/^\{[a-z0-9_]+\}$/i.test(trimmed)) return null;
   return validateSlugModule(trimmed, 'utm_term');
 }
 
 export function validateCustomParams(value) {
   if (!value || !value.trim()) return null;
-  const pairs = value.split('&').map(pair => pair.trim());
+  const pairs = value.split('&').map((pair) => pair.trim());
   for (const pair of pairs) {
     if (!pair) {
       return 'Leere Parameter zwischen & sind nicht erlaubt';
@@ -293,7 +229,10 @@ export function validateBaseUrl(value) {
 /**
  * Führt den vollständigen Check über alle Parameter inklusive Plausibilitäts-Warnungen durch.
  */
-export function validateFullUtmState(state, { sources = [], allowedMediums = ALLOWED_MEDIUMS, allowedFunnels = ALLOWED_FUNNELS } = {}) {
+export function validateFullUtmState(
+  state,
+  { sources = [], allowedMediums = null, allowedFunnels = null, isNewPublisher = false } = {}
+) {
   const errors = {};
   const warnings = {};
 
@@ -303,7 +242,7 @@ export function validateFullUtmState(state, { sources = [], allowedMediums = ALL
   const mediumErr = validateUtmMedium(state.medium, allowedMediums);
   if (mediumErr) errors.medium = mediumErr;
 
-  const sourceErr = validateUtmSource(state.source);
+  const sourceErr = validateUtmSource(state.source, sources, isNewPublisher);
   if (sourceErr) errors.source = sourceErr;
 
   const campaignErr = validateUtmCampaignParts(
@@ -321,18 +260,17 @@ export function validateFullUtmState(state, { sources = [], allowedMediums = ALL
   const customErr = validateCustomParams(state.customParams);
   if (customErr) errors.customParams = customErr;
 
-  // Kontext-Plausibilitäts-Checks (Warnungen)
   if (state.source && state.medium && Array.isArray(sources) && sources.length > 0) {
-    const sourceObj = sources.find(s => s.slug === state.source);
+    const sourceObj = sources.find((s) => s.slug === state.source);
     if (sourceObj && Array.isArray(sourceObj.allowed_mediums) && sourceObj.allowed_mediums.length > 0) {
       if (!sourceObj.allowed_mediums.includes(state.medium)) {
-        warnings.sourceMedium = `Hinweis: "${state.source}" wird üblicherweise mit ${sourceObj.allowed_mediums.join(' oder ')} kombiniert (gewählt: ${state.medium}).`;
+        errors.source = `"${state.source}" ist für das Medium "${state.medium}" nicht erlaubt (erlaubt: ${sourceObj.allowed_mediums.join(', ')}).`;
       }
     }
   }
 
-  if (state.source === '{{site_source_name}}' && state.medium && state.medium !== 'paid_social') {
-    warnings.sourceMedium = 'Der dynamische Platzhalter {{site_source_name}} wird nur in Meta Ads (utm_medium=paid_social) automatisch durch fb/ig ersetzt.';
+  if (isDynamicPlatformToken(state.source) && state.medium && state.medium !== 'paid_social') {
+    warnings.sourceMedium = `Der dynamische Platzhalter ${state.source} wird nur in bezahlten Social-Ads (z. B. paid_social) automatisch aufgelöst.`;
   }
 
   if (state.term === '{keyword}' && state.medium && state.medium !== 'cpc') {
@@ -340,7 +278,8 @@ export function validateFullUtmState(state, { sources = [], allowedMediums = ALL
   }
 
   if (state.medium === 'offline') {
-    warnings.offline = 'Offline-Pro-Tipp: Für QR-Codes auf Rollups oder Print-Mailings eine TYPO3-Short-URL (z. B. medatixx.de/partner-...) auf diese UTM-URL weiterleiten und unten dokumentieren.';
+    warnings.offline =
+      'Offline-Pro-Tipp: Für QR-Codes auf Rollups oder Print-Mailings eine TYPO3-Short-URL auf diese UTM-URL weiterleiten und unten dokumentieren.';
   }
 
   return {

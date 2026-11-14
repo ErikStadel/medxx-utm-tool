@@ -1,14 +1,21 @@
 import React, { useMemo, useState } from 'react';
 import { Copy, Check, Trash2, Search, ExternalLink } from 'lucide-react';
 import LayoutHeader from './LayoutHeader';
-import { ALLOWED_MEDIUMS } from '../utils/utmValidation';
 
-const SavedLinks = ({ links = [], setLinks, user, onLogout }) => {
+const SavedLinks = ({ links = [], setLinks, components = [], user, onLogout }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [mediumFilter, setMediumFilter] = useState('');
   const [onlyMine, setOnlyMine] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
   const [error, setError] = useState('');
+
+  const mediumOptions = useMemo(() => {
+    const dbMediums = components
+      .filter((c) => c.component_type === 'medium' && c.is_active !== false)
+      .map((c) => c.slug);
+    if (dbMediums.length > 0) return dbMediums;
+    return Array.from(new Set(links.map((l) => l.utm_medium).filter(Boolean))).sort();
+  }, [components, links]);
 
   const filteredLinks = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -88,7 +95,7 @@ const SavedLinks = ({ links = [], setLinks, user, onLogout }) => {
                 className="flex-1"
               >
                 <option value="">Alle Mediums</option>
-                {ALLOWED_MEDIUMS.map((m) => (
+                {mediumOptions.map((m) => (
                   <option key={m} value={m}>
                     {m}
                   </option>

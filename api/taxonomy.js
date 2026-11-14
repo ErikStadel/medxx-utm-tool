@@ -1,8 +1,8 @@
 import { requireAuth } from './_lib/auth.js';
 import {
-  ALLOWED_MEDIUMS,
   SOURCE_CATEGORIES,
   USER_CREATABLE_SOURCE_CATEGORIES,
+  isDynamicPlatformToken,
   isValidSlug,
   normalizeSlug,
 } from './_lib/utmRules.js';
@@ -54,18 +54,29 @@ export default async function handler(req, res) {
           });
         }
 
-        const cleanSlug = normalizeSlug(rawSlug || label);
-        if (!isValidSlug(cleanSlug)) {
+        const rawInput = (rawSlug || label || '').trim();
+        const cleanSlug =
+          isAdmin && isDynamicPlatformToken(rawInput) ? rawInput : normalizeSlug(rawInput);
+        if (!isValidSlug(cleanSlug) && !(isAdmin && isDynamicPlatformToken(cleanSlug))) {
           return res.status(400).json({
             error: 'Slug ist ungültig (nur Kleinbuchstaben a-z, Ziffern 0-9 und Bindestriche - erlaubt)',
           });
         }
 
         const cleanLabel = (label || cleanSlug).trim();
+
+        const mediumRowsRaw = await sql`
+          SELECT slug FROM utm_components
+          WHERE component_type = 'medium' AND is_active = TRUE;
+        `;
+        const dbMediums = (Array.isArray(mediumRowsRaw) ? mediumRowsRaw : mediumRowsRaw.rows || []).map(
+          (r) => r.slug
+        );
+
         const validDefaultMedium =
-          default_medium && ALLOWED_MEDIUMS.includes(default_medium) ? default_medium : null;
+          default_medium && dbMediums.includes(default_medium) ? default_medium : null;
         const validAllowedMediums = Array.isArray(allowed_mediums)
-          ? allowed_mediums.filter((m) => ALLOWED_MEDIUMS.includes(m))
+          ? allowed_mediums.filter((m) => dbMediums.includes(m))
           : validDefaultMedium
             ? [validDefaultMedium]
             : [];
@@ -176,18 +187,26 @@ export default async function handler(req, res) {
           });
         }
 
+        const mediumRowsRaw = await sql`
+          SELECT slug FROM utm_components
+          WHERE component_type = 'medium' AND is_active = TRUE;
+        `;
+        const dbMediums = (Array.isArray(mediumRowsRaw) ? mediumRowsRaw : mediumRowsRaw.rows || []).map(
+          (r) => r.slug
+        );
+
         const { label, default_medium, allowed_mediums, shortlink_path, is_active } = req.body || {};
         const nextLabel = label !== undefined ? label.trim() : existing.label;
         const nextDefaultMedium =
           default_medium !== undefined
-            ? ALLOWED_MEDIUMS.includes(default_medium)
+            ? dbMediums.includes(default_medium)
               ? default_medium
               : null
             : existing.default_medium;
         const nextAllowedMediums =
           allowed_mediums !== undefined
             ? Array.isArray(allowed_mediums)
-              ? allowed_mediums.filter((m) => ALLOWED_MEDIUMS.includes(m))
+              ? allowed_mediums.filter((m) => dbMediums.includes(m))
               : []
             : existing.allowed_mediums;
         const nextShortlink =

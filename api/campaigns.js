@@ -47,7 +47,15 @@ export default async function handler(req, res) {
       const { category, inhaber: providedInhaber } = req.body || {};
       const { name, topic_slug, audience_slug, funnel_slug } = resolveCampaignParts(req.body);
 
-      const nameErr = validateCampaignName(name);
+      const funnelResult = await sql`
+        SELECT slug FROM utm_components
+        WHERE component_type = 'funnel' AND is_active = TRUE;
+      `;
+      const allowedFunnels = (Array.isArray(funnelResult) ? funnelResult : funnelResult.rows || []).map(
+        (r) => r.slug
+      );
+
+      const nameErr = validateCampaignName(name, allowedFunnels);
       if (nameErr) {
         return res.status(400).json({ error: nameErr });
       }
@@ -71,7 +79,14 @@ export default async function handler(req, res) {
       }
 
       const { name, topic_slug, audience_slug, funnel_slug } = resolveCampaignParts(req.body);
-      const nameErr = validateCampaignName(name);
+      const funnelResult = await sql`
+        SELECT slug FROM utm_components
+        WHERE component_type = 'funnel' AND is_active = TRUE;
+      `;
+      const allowedFunnels = (Array.isArray(funnelResult) ? funnelResult : funnelResult.rows || []).map(
+        (r) => r.slug
+      );
+      const nameErr = validateCampaignName(name, allowedFunnels);
       if (nameErr) {
         return res.status(400).json({ error: nameErr });
       }

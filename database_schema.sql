@@ -23,9 +23,6 @@ ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS topic_slug VARCHAR(120);
 ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS audience_slug VARCHAR(120);
 ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS funnel_slug VARCHAR(50);
 
--- Optional: Alte Test-Kampagnen vor dem Start bereinigen (falls gewünscht manuell ausführen):
--- DELETE FROM campaigns WHERE topic_slug IS NULL;
-
 -- Sources: Plattformen, Fachportale/Publisher, Offline, Service-Partner, Standorte, Messen/Events
 CREATE TABLE IF NOT EXISTS utm_sources (
     id SERIAL PRIMARY KEY,
@@ -82,7 +79,7 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO utm_components (component_type, slug, label, description, sort_order, is_locked)
 VALUES
     ('medium', 'cpc', 'cpc', 'Search / SEA (Google Ads)', 10, TRUE),
-    ('medium', 'paid_social', 'paid_social', 'Meta, LinkedIn Ads', 20, TRUE),
+    ('medium', 'paid_social', 'paid_social', 'Meta, LinkedIn, TikTok Ads', 20, TRUE),
     ('medium', 'organic_social', 'organic_social', 'Unbezahlte Social-Posts', 30, TRUE),
     ('medium', 'email', 'email', 'Newsletter, Mailings via CleverReach / SFMC', 40, TRUE),
     ('medium', 'display', 'display', 'Banner auf Fachportalen, GDN', 50, TRUE),
@@ -92,19 +89,29 @@ VALUES
     ('medium', 'referral', 'referral', 'Unbezahlte Partner-Verlinkungen', 90, TRUE)
 ON CONFLICT (component_type, slug) DO NOTHING;
 
--- Seed: utm_campaign Modul A - [Thema]
+-- Seed: utm_campaign Modul A - [Thema] (vollständiger Katalog: Dach, Events/Aktionen, Lösungen/Produkte)
 INSERT INTO utm_components (component_type, slug, label, description, sort_order, is_locked)
 VALUES
-    ('topic', 'healthhub', 'healthhub', 'HealthHub Initiative', 10, FALSE),
-    ('topic', 'meet-medatixx', 'meet-medatixx', 'meet.medatixx Kampagne', 20, FALSE),
-    ('topic', 'regulatorik', 'regulatorik', 'Regulatorik-Themen', 30, FALSE),
-    ('topic', 'ki-in-der-praxis', 'ki-in-der-praxis', 'KI in der Praxis', 40, FALSE),
-    ('topic', 'ti-bundle', 'ti-bundle', 'TI-Bundle', 50, FALSE),
-    ('topic', 'isynet-fruehbucher', 'isynet-fruehbucher', 'x.isynet Frühbucher-Angebot', 60, FALSE),
-    ('topic', 'fit-fuer-medatixx', 'fit-fuer-medatixx', 'Fit für medatixx', 70, FALSE),
-    ('topic', 'stand-tablet', 'stand-tablet', 'Messe-Lead-Erfassung über Stand-Tablet', 80, FALSE),
-    ('topic', 'xscribe', 'xscribe', 'x.scribe Transkription', 90, FALSE),
-    ('topic', 'praxissoftware', 'praxissoftware', 'Generische Praxissoftware-Kampagne', 100, FALSE)
+    -- A) Übergeordnete Dach- & Imagekampagnen
+    ('topic', 'regulatorik', 'regulatorik', 'Regulatorik-Themen (allgemein)', 10, FALSE),
+    ('topic', 'regulatorik-2027', 'regulatorik-2027', 'Geplante Dachkampagne Regulatorik 2027', 15, FALSE),
+    ('topic', 'zukunft-endspurt', 'zukunft-endspurt', 'Jahresendspurt-Kampagne (medatixx / psyx)', 20, FALSE),
+    ('topic', 'fit-fuer-medatixx', 'fit-fuer-medatixx', 'Fit für medatixx', 25, FALSE),
+    ('topic', 'ki-in-der-praxis', 'ki-in-der-praxis', 'Themen-Hub rund um KI-Anwendungen', 30, FALSE),
+    ('topic', 'praxissoftware', 'praxissoftware', 'Generische Always-On / Search-Kampagnen', 35, FALSE),
+    -- B) Events, Formate & Aktionen
+    ('topic', 'meet-medatixx', 'meet-medatixx', 'Online-Eventreihe (z. B. HealthHub-Showcase)', 40, FALSE),
+    ('topic', 'adventskalender', 'adventskalender', 'Adventskalender-Aktion', 45, FALSE),
+    ('topic', 'stand-tablet', 'stand-tablet', 'Lead-Erfassung vor Ort auf Messen/Kongressen', 50, FALSE),
+    ('topic', 'bk-aktion', 'bk-aktion', 'Allgemeine Bestandskunden-Aktionen (z. B. Q4)', 55, FALSE),
+    -- C) Lösungs- & Produkt-Initiativen
+    ('topic', 'healthhub', 'healthhub', 'HealthHub (inkl. Aktionen/Upgrades)', 60, FALSE),
+    ('topic', 'clinical-intelligence', 'clinical-intelligence', 'Clinical Intelligence', 65, FALSE),
+    ('topic', 'xscribe', 'xscribe', 'x.scribe Transkription', 70, FALSE),
+    ('topic', 'private-cloud', 'private-cloud', 'Private Cloud', 75, FALSE),
+    ('topic', 'isynet-fruehbucher', 'isynet-fruehbucher', 'x.isynet Frühbucher-Angebot', 80, FALSE),
+    ('topic', 'ti-bundle', 'ti-bundle', 'Telematikinfrastruktur-Angebote', 85, FALSE),
+    ('topic', 'psyx', 'psyx', 'Spezifische Kampagnen für die Psychotherapie-Linie', 90, FALSE)
 ON CONFLICT (component_type, slug) DO NOTHING;
 
 -- Seed: utm_campaign Modul B - [Zielgruppe]
@@ -166,6 +173,7 @@ VALUES
     ('linkedin', 'LinkedIn', 'digital', 'paid_social', ARRAY['paid_social', 'organic_social'], NULL),
     ('{{site_source_name}}', 'Meta Ads dynamisch (fb / ig)', 'digital', 'paid_social', ARRAY['paid_social'], NULL),
     ('meta', 'Meta (Organic / statisch)', 'digital', 'organic_social', ARRAY['organic_social'], NULL),
+    ('tiktok', 'TikTok', 'digital', 'paid_social', ARRAY['paid_social', 'organic_social'], NULL),
     ('cleverreach', 'CleverReach', 'digital', 'email', ARRAY['email'], NULL),
     ('aerzteblatt', 'Deutsches Ärzteblatt', 'publisher', 'advertorial', ARRAY['advertorial', 'display', 'email'], NULL),
     ('coliquio', 'coliquio', 'publisher', 'advertorial', ARRAY['advertorial', 'display', 'email'], NULL),
@@ -177,7 +185,12 @@ VALUES
     ('messe-dusseldorf', 'Messe Düsseldorf', 'event', 'event', ARRAY['event'], NULL),
     ('interbiologica', 'interbiologica', 'event', 'event', ARRAY['event'], NULL),
     ('apontis', 'apontis', 'event', 'event', ARRAY['event'], NULL)
-ON CONFLICT (slug) DO NOTHING;
+ON CONFLICT (slug) DO UPDATE
+SET
+    label = EXCLUDED.label,
+    default_medium = EXCLUDED.default_medium,
+    allowed_mediums = EXCLUDED.allowed_mediums
+WHERE utm_sources.slug IN ('{{site_source_name}}', 'meta', 'tiktok');
 
 -- Seed: Service Partner (45 Partner mit offiziellen Tracking-IDs)
 INSERT INTO utm_sources (slug, label, category, default_medium, allowed_mediums)

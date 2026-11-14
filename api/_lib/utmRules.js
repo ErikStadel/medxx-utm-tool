@@ -1,25 +1,9 @@
-export const ALLOWED_MEDIUMS = [
-  'cpc',
-  'paid_social',
-  'organic_social',
-  'email',
-  'display',
-  'advertorial',
-  'offline',
-  'event',
-  'referral',
-];
-
-export const ALLOWED_FUNNELS = ['tofu', 'mofu', 'bofu', 'retargeting'];
-export const PUBLISHER_ALLOWED_MEDIUMS = ['advertorial', 'display', 'email', 'referral'];
-
 export const SOURCE_CATEGORIES = ['digital', 'publisher', 'offline', 'partner', 'location', 'event'];
 export const USER_CREATABLE_SOURCE_CATEGORIES = ['partner', 'event'];
 export const COMPONENT_TYPES = ['medium', 'topic', 'audience', 'funnel', 'angle', 'format'];
 
-export const DYNAMIC_SOURCE_TOKENS = ['{{site_source_name}}'];
-
 const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const DYNAMIC_PLATFORM_TOKEN_REGEX = /^\{\{[a-z0-9_]+\}\}$/;
 
 export function normalizeSlug(value) {
   if (!value || typeof value !== 'string') return '';
@@ -40,11 +24,17 @@ export function isValidSlug(value) {
   return typeof value === 'string' && SLUG_REGEX.test(value);
 }
 
-export function isValidSourceValue(value) {
-  return typeof value === 'string' && (DYNAMIC_SOURCE_TOKENS.includes(value.trim()) || isValidSlug(value.trim()));
+export function isDynamicPlatformToken(value) {
+  return typeof value === 'string' && DYNAMIC_PLATFORM_TOKEN_REGEX.test(value.trim());
 }
 
-export function validateCampaignName(name) {
+export function isValidSourceValue(value) {
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  return isDynamicPlatformToken(trimmed) || isValidSlug(trimmed);
+}
+
+export function validateCampaignName(name, allowedFunnels = null) {
   if (!name || typeof name !== 'string') {
     return 'Kampagnenname ist erforderlich';
   }
@@ -59,8 +49,11 @@ export function validateCampaignName(name) {
   if (!isValidSlug(audience)) {
     return 'Zielgruppe enthält ungültige Zeichen (nur Kleinbuchstaben a-z, Ziffern 0-9 und Bindestriche - erlaubt)';
   }
-  if (!ALLOWED_FUNNELS.includes(funnel)) {
-    return `Funnel muss einer der Werte sein: ${ALLOWED_FUNNELS.join(', ')}`;
+  if (!isValidSlug(funnel)) {
+    return 'Funnel enthält ungültige Zeichen';
+  }
+  if (Array.isArray(allowedFunnels) && allowedFunnels.length > 0 && !allowedFunnels.includes(funnel)) {
+    return `Funnel muss einer der Werte sein: ${allowedFunnels.join(', ')}`;
   }
   return null;
 }
@@ -83,14 +76,14 @@ export function validateUtmTerm(term) {
   if (!term) return null;
   if (typeof term !== 'string') return 'utm_term muss eine Zeichenkette sein';
   const trimmed = term.trim();
-  if (trimmed === '{keyword}') return null;
+  if (/^\{[a-z0-9_]+\}$/i.test(trimmed)) return null;
   if (!isValidSlug(trimmed)) {
     return 'utm_term darf nur Kleinbuchstaben a-z, Ziffern 0-9 und Bindestriche - enthalten (oder {keyword})';
   }
   return null;
 }
 
-export function validateLinkPayload(payload) {
+export function validateLinkPayload(payload, { allowedMediums = null, allowedFunnels = null } = {}) {
   const {
     base_url,
     full_url,
@@ -106,13 +99,16 @@ export function validateLinkPayload(payload) {
     return 'Base-URL, vollständige URL und Tracking-Template sind erforderlich';
   }
   if (!isValidSourceValue(utm_source)) {
-    return 'utm_source ist ungültig (nur Kleinbuchstaben, Ziffern, Bindestriche oder {{site_source_name}} erlaubt)';
+    return 'utm_source ist ungültig';
   }
-  if (!ALLOWED_MEDIUMS.includes(utm_medium)) {
-    return `utm_medium muss ein gültiger GA4-Wert sein: ${ALLOWED_MEDIUMS.join(', ')}`;
+  if (!utm_medium || typeof utm_medium !== 'string') {
+    return 'utm_medium ist erforderlich';
+  }
+  if (Array.isArray(allowedMediums) && allowedMediums.length > 0 && !allowedMediums.includes(utm_medium)) {
+    return `utm_medium "${utm_medium}" ist in der Datenbank nicht als aktiver Standard hinterlegt`;
   }
 
-  const campaignErr = validateCampaignName(utm_campaign);
+  const campaignErr = validateCampaignName(utm_campaign, allowedFunnels);
   if (campaignErr) return campaignErr;
 
   const contentErr = validateContentString(utm_content);

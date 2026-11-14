@@ -105,31 +105,81 @@ describe('Konzept-Fallbeispiele Validierung', () => {
     });
   });
 
-  test('verhindert Großbuchstaben, Umlaute, Unterstriche innerhalb Modulen und ungültige Mediums/Funnels', () => {
+  test('verhindert Großbuchstaben, Umlaute, Unterstriche innerhalb Modulen und ungültige Mediums/Funnels aus der DB', () => {
+    const dbMediums = ['cpc', 'paid_social', 'organic_social', 'advertorial', 'display', 'email', 'offline', 'event', 'referral'];
+    const dbFunnels = ['tofu', 'mofu', 'bofu', 'retargeting'];
+    const dbSources = [
+      { slug: 'google', allowed_mediums: ['cpc', 'display'] },
+      { slug: 'tiktok', allowed_mediums: ['paid_social', 'organic_social'] },
+    ];
+
     expect(validateUtmSource('LinkedIn')).toBeTruthy();
     expect(validateUtmSource('partner_mueller')).toBeTruthy();
     expect(validateUtmSource('ärzteblatt')).toBeTruthy();
-    expect(validateUtmMedium('aff')).toBeTruthy();
+    expect(validateUtmSource('tiktok', dbSources)).toBeNull();
+    expect(validateUtmSource('unbekannt', dbSources, false)).toBeTruthy();
+    expect(validateUtmSource('neuer-publisher', dbSources, true)).toBeNull();
+
+    expect(validateUtmMedium('aff', dbMediums)).toBeTruthy();
+    expect(validateUtmMedium('paid_social', dbMediums)).toBeNull();
 
     expect(
-      validateUtmCampaignParts({
-        topic: 'ki_praxis',
-        audience: 'aerzte-allg',
-        funnel: 'mofu',
-      })
+      validateUtmCampaignParts(
+        {
+          topic: 'ki_praxis',
+          audience: 'aerzte-allg',
+          funnel: 'mofu',
+        },
+        dbFunnels
+      )
     ).toBeTruthy();
 
     expect(
-      validateUtmCampaignParts({
-        topic: 'healthhub',
-        audience: 'aerzte-allg',
-        funnel: 'unknown',
-      })
+      validateUtmCampaignParts(
+        {
+          topic: 'healthhub',
+          audience: 'aerzte-allg',
+          funnel: 'unknown',
+        },
+        dbFunnels
+      )
     ).toBeTruthy();
 
-    expect(validateUtmCampaignString('healthhub_aerzte-allg')).toBeTruthy();
-    expect(validateUtmCampaignString('healthhub_aerzte_allg_mofu')).toBeTruthy();
-    expect(validateUtmCampaignString('healthhub_aerzte-allg_mofu')).toBeNull();
+    expect(validateUtmCampaignString('healthhub_aerzte-allg', dbFunnels)).toBeTruthy();
+    expect(validateUtmCampaignString('healthhub_aerzte_allg_mofu', dbFunnels)).toBeTruthy();
+    expect(validateUtmCampaignString('healthhub_aerzte-allg_mofu', dbFunnels)).toBeNull();
+  });
+
+  test('akzeptiert alle 17 definierten Kampagnen-Themen als gültige Campaign-Bausteine', () => {
+    const allTopics = [
+      'regulatorik',
+      'regulatorik-2027',
+      'zukunft-endspurt',
+      'fit-fuer-medatixx',
+      'ki-in-der-praxis',
+      'praxissoftware',
+      'meet-medatixx',
+      'adventskalender',
+      'stand-tablet',
+      'bk-aktion',
+      'healthhub',
+      'clinical-intelligence',
+      'xscribe',
+      'private-cloud',
+      'isynet-fruehbucher',
+      'ti-bundle',
+      'psyx',
+    ];
+    const dbFunnels = ['tofu', 'mofu', 'bofu', 'retargeting'];
+
+    allTopics.forEach((topic) => {
+      expect(
+        validateUtmCampaignParts(
+          { topic, audience: 'aerzte-allg', funnel: 'tofu' },
+          dbFunnels
+        )
+      ).toBeNull();
+    });
   });
 
   test('prüft utm_content Paar-Vollständigkeit und genau 1 Unterstrich', () => {
@@ -204,31 +254,41 @@ describe('Konzept-Fallbeispiele Validierung', () => {
     });
   });
 
-  test('akzeptiert {{site_source_name}} für Meta Paid Social und warnt bei falschem Medium', () => {
-    expect(validateUtmSource('{{site_source_name}}')).toBeNull();
+  test('akzeptiert {{site_source_name}} aus der DB für Meta Paid Social und blockiert unzulässige Medien', () => {
+    const dbSources = [
+      { slug: '{{site_source_name}}', allowed_mediums: ['paid_social'] },
+    ];
+    expect(validateUtmSource('{{site_source_name}}', dbSources)).toBeNull();
 
-    const paidMeta = validateFullUtmState({
-      baseUrl: 'https://medatixx.de',
-      source: '{{site_source_name}}',
-      medium: 'paid_social',
-      topic: 'healthhub',
-      audience: 'aerzte-allg',
-      funnel: 'tofu',
-      angle: 'pain',
-      format: 'image',
-    });
+    const paidMeta = validateFullUtmState(
+      {
+        baseUrl: 'https://medatixx.de',
+        source: '{{site_source_name}}',
+        medium: 'paid_social',
+        topic: 'healthhub',
+        audience: 'aerzte-allg',
+        funnel: 'tofu',
+        angle: 'pain',
+        format: 'image',
+      },
+      { sources: dbSources, allowedMediums: ['paid_social', 'organic_social'], allowedFunnels: ['tofu', 'mofu', 'bofu'] }
+    );
     expect(paidMeta.isValid).toBe(true);
     expect(paidMeta.warnings.sourceMedium).toBeUndefined();
 
-    const organicMetaDynamic = validateFullUtmState({
-      baseUrl: 'https://medatixx.de',
-      source: '{{site_source_name}}',
-      medium: 'organic_social',
-      topic: 'healthhub',
-      audience: 'aerzte-allg',
-      funnel: 'tofu',
-    });
-    expect(organicMetaDynamic.isValid).toBe(true);
-    expect(organicMetaDynamic.warnings.sourceMedium).toBeTruthy();
+    const blockedByDb = validateFullUtmState(
+      {
+        baseUrl: 'https://medatixx.de',
+        source: '{{site_source_name}}',
+        medium: 'organic_social',
+        topic: 'healthhub',
+        audience: 'aerzte-allg',
+        funnel: 'tofu',
+      },
+      { sources: dbSources, allowedMediums: ['paid_social', 'organic_social'], allowedFunnels: ['tofu', 'mofu', 'bofu'] }
+    );
+    expect(blockedByDb.isValid).toBe(false);
+    expect(blockedByDb.errors.source).toBeTruthy();
+    expect(blockedByDb.warnings.sourceMedium).toBeTruthy();
   });
 });

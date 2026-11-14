@@ -128,6 +128,7 @@ const App = () => {
             <SavedLinks
               links={savedLinks}
               setLinks={setSavedLinks}
+              components={components}
               user={user}
               onLogout={handleLogout}
             />
